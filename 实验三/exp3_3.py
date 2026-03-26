@@ -30,7 +30,6 @@ def simulate_lif_constant(
 
 # 根据课上理论公式计算 LIF 神经元的理论发放频率
 def theoretical_firing_rate(I, tau_m=10.0, v_th=15.0, R=1.0):
-    # TODO 3：
     RI = R * I
     # 1. 判断是否达到发放阈值
     if RI <= v_th:
