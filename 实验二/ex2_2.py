@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']  # macOS 全版本自带的通用中文字体
-plt.rcParams['axes.unicode_minus'] = False              # 解决负号显示为方块
+plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
+plt.rcParams['axes.unicode_minus'] = False
 
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))

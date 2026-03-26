@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 全局字体设置（macOS中文显示）
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
 

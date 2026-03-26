@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ccad2108-232d-4bc4-9bc0-5939aebbda61" name="更改" comment="完善命名 完成了实验1、2">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/exp3_3.py" beforeDir="false" afterPath="$PROJECT_DIR$/exp3_3.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/xp3_4.py" beforeDir="false" afterPath="$PROJECT_DIR$/exp3_4.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../实验二/ex_1.py" beforeDir="false" />
-    </list>
+    <list default="true" id="ccad2108-232d-4bc4-9bc0-5939aebbda61" name="更改" comment="修改了文件命名" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -108,7 +103,39 @@
       <option name="project" value="LOCAL" />
       <updated>1774490830424</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="完成了全部实验内容">
+      <option name="closed" value="true" />
+      <created>1774516115934</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1774516115934</updated>
+    </task>
+    <task id="LOCAL-00006" summary="修改了注释以及文件命名">
+      <option name="closed" value="true" />
+      <created>1774516191290</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1774516191290</updated>
+    </task>
+    <task id="LOCAL-00007" summary="修改了文件命名">
+      <option name="closed" value="true" />
+      <created>1774516213703</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1774516213703</updated>
+    </task>
+    <task id="LOCAL-00008" summary="修改了文件命名">
+      <option name="closed" value="true" />
+      <created>1774516239624</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1774516239624</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -125,6 +152,9 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="创建实验三" />
     <MESSAGE value="完善命名 完成了实验1、2" />
-    <option name="LAST_COMMIT_MESSAGE" value="完善命名 完成了实验1、2" />
+    <MESSAGE value="完成了全部实验内容" />
+    <MESSAGE value="修改了注释以及文件命名" />
+    <MESSAGE value="修改了文件命名" />
+    <option name="LAST_COMMIT_MESSAGE" value="修改了文件命名" />
   </component>
 </project>
