@@ -1,0 +1,75 @@
+NEW_FILE_CODE
+# macOS 系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows 系统文件
+Thumbs.db
+desktop.ini
+
+# IDE 配置文件夹（除了 .idea 中已配置的外）
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Python 缓存和编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Python 测试和覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Jupyter Notebook 检查点
+.ipynb_checkpoints
+
+# 虚拟环境
+env/
+venv/
+ENV/
+.venv
+
+# 编辑器文件
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 允许的文件类型
+!.py
+!.pdf
+!.md
+!.txt
+!.rst
