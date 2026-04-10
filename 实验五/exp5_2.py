@@ -17,13 +17,9 @@ plt.rcParams["axes.unicode_minus"] = False
 
 # 根据赫布规则更新权重：相关输入越强，且能驱动输出发放，其权重越容易增强
 def hebb_update(w, x, y, eta, w_min=0.0, w_max=1.0):
-    # TODO 2：
-    # 请根据文中的赫布规则补全权重更新公式。
-    # 赫布更新：wi ← clip(wi + η*xi*y, w_min, w_max)
     w_new = w + eta * x * y
     w_new = np.clip(w_new, w_min, w_max)
     return w_new
-    # raise NotImplementedError("请补全 hebb_update 中的权重更新逻辑")
 
 
 # 根据输入发放概率生成一段二值脉冲序列，固定随机种子便于复现实验结果

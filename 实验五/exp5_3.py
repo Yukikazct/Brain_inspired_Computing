@@ -40,7 +40,6 @@ def add_gaussian_timing_noise(time_value, noise_std, rng):
 
 # 椒盐型脉冲噪声：随机删除已有脉冲，或者随机注入一个伪脉冲
 def add_salt_pepper_spike_noise(spike_times, noise_level, rng):
-    # TODO 3：
     prob = noise_level / 100.0
     new_spikes = []
     # Pepper：随机删除脉冲
@@ -85,7 +84,6 @@ def process_rate_coding(image, noise_level):
 
 # 根据首次脉冲发放时间编码构造理想首次脉冲，再施加“椒盐型脉冲噪声 + 高斯时间抖动”
 def process_ttfs_coding(image, noise_level):
-    # TODO 5：
     H, W = image.shape
     decoded = np.zeros_like(image)
     rng = np.random.default_rng(seed=42)
