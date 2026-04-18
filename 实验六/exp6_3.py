@@ -20,7 +20,6 @@ plt.rcParams["font.sans-serif"] = [
 ]
 plt.rcParams["axes.unicode_minus"] = False
 
-# 只保留三个类别，保证“真实图像任务”与“手写 BP 不过重”之间取得平衡
 CLASS_INFO = {
     1: "trouser",
     8: "bag",
