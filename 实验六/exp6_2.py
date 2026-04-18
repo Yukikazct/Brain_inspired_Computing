@@ -44,7 +44,6 @@ def generate_gaussian_blob_data(num_per_class=60, class_gap=3.2, spread=0.45, se
 
 # 根据当前参数对一批样本做预测
 def predict_labels(X, w, b):
-    # TODO 1：补全感知机预测
     return np.sign(X @ w + b)
 
 
@@ -57,7 +56,6 @@ def fit_perceptron(X, y, lr=1.0, num_epochs=30, shuffle_seed=0):
     for _ in range(num_epochs):
         # 将样本顺序打乱
         idx = rng.permutation(len(X))
-        # TODO 2：补全训练逻辑
         for xi, yi in zip(X[idx], y[idx]):
             # 预测当前样本
             y_pred = predict_labels(xi.reshape(1, -1), w, b)[0]

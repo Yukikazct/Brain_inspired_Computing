@@ -159,7 +159,7 @@ def iterate_minibatches(num_samples, batch_size, seed):
 
 # 初始化单隐藏层 MLP 的参数
 def init_params(input_dim, hidden_size, output_dim, seed=7):
-    # TODO 1：补全参数初始化（He初始化，适配ReLU）
+
     rng = np.random.default_rng(seed)
     W1 = rng.normal(0, np.sqrt(2 / input_dim), (input_dim, hidden_size))
     b1 = np.zeros(hidden_size)
@@ -170,7 +170,6 @@ def init_params(input_dim, hidden_size, output_dim, seed=7):
 
 # 前向传播：输入展平图像 -> 隐藏层线性变换 -> ReLU -> 输出层 logits -> softmax 概率
 def forward_pass(X, y, params):
-    # TODO 2：补全前向传播、softmax与交叉熵损失
     W1, b1 = params["W1"], params["b1"]
     W2, b2 = params["W2"], params["b2"]
 

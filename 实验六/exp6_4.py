@@ -76,7 +76,7 @@ def iterate_minibatches(num_samples, batch_size, seed):
 
 # 初始化单隐藏层回归网络的参数
 def init_regression_params(input_dim, hidden_size, seed=7):
-    # TODO 1：补全参数初始化（He初始化）
+
     rng = np.random.default_rng(seed)
     W1 = rng.normal(0, np.sqrt(2 / input_dim), (input_dim, hidden_size))
     b1 = np.zeros(hidden_size)
@@ -87,7 +87,6 @@ def init_regression_params(input_dim, hidden_size, seed=7):
 
 # 前向传播：5 维输入 -> 隐藏层 ReLU -> 1 维回归输出
 def forward_regression(X, y, params):
-    # TODO 2：补全前向传播与 MSE 计算
     W1, b1 = params["W1"], params["b1"]
     W2, b2 = params["W2"], params["b2"]
 
@@ -108,7 +107,6 @@ def forward_regression(X, y, params):
 
 # 反向传播：根据 MSE 的梯度更新单隐藏层回归模型参数
 def backward_regression_and_update(cache, params, lr):
-    # TODO 3：补全反向传播与参数更新
     X, Z1, H, y_pred, y = cache["X"], cache["Z1"], cache["H"], cache["y_pred"], cache["y"]
     batch_size = X.shape[0]
 
@@ -136,14 +134,12 @@ def backward_regression_and_update(cache, params, lr):
 
 # 在完整数据集上评估当前模型的 MSE
 def evaluate_regression_dataset(X, y, params):
-    # TODO 4：补全模型评估函数
     loss, cache = forward_regression(X, y, params)
     return loss, cache["y_pred"]
 
 
 # 训练回归模型，并记录训练集与验证集损失变化
 def train_regression_model(train_X, train_y, val_X, val_y, hidden_size, lr, num_epochs, batch_size, seed=7):
-    # TODO 5：补全完整训练流程
     input_dim = train_X.shape[1]
     params = init_regression_params(input_dim, hidden_size, seed)
 
@@ -224,11 +220,9 @@ def main():
     batch_size = 64
     seed = 7
 
-    # 先下载并读取房价数据，再完成固定特征的预处理
     csv_path = download_house_price_csv(data_dir="./data")
     train_X, train_y, val_X, val_y = prepare_house_price_data(csv_path=csv_path, seed=seed)
 
-    # 再调用你自己实现的回归训练函数
     params, history = train_regression_model(
         train_X=train_X,
         train_y=train_y,
