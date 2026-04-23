@@ -162,11 +162,11 @@ def draw_weight_dependent_window_panel(ax, tau_plus, tau_minus, a_plus, a_minus,
 
 def main():
     # 本实验要求修改的参数
-    tau_plus = 10.0       # LTP 时间常数；越大，pre 先于 post 的增强窗口越宽
+    tau_plus = 20.0       # LTP 时间常数；越大，pre 先于 post 的增强窗口越宽
     tau_minus = 10.0      # LTD 时间常数；越大，post 先于 pre 的减弱窗口越宽
     a_plus = 0.08         # pair-based STDP 中 LTP 的最大权重变化幅度
     a_minus = 0.08        # pair-based STDP 中 LTD 的最大权重变化幅度
-    w_demo = 0.80         # 权重依赖 STDP 时间窗口中用于演示的当前权重
+    w_demo = 0.10         # 权重依赖 STDP 时间窗口中用于演示的当前权重
     eta_plus = 0.08       # 权重依赖 STDP 中 LTP 的基础更新幅度
     eta_minus = 0.08      # 权重依赖 STDP 中 LTD 的基础更新幅度
     fig = plt.figure(figsize=(13, 8.8))
