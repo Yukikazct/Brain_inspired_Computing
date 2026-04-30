@@ -1,324 +1,533 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+import time
 
-# 配置中文字体，避免绘图时标题或坐标轴出现乱码
-plt.rcParams["font.sans-serif"] = [
-    "PingFang SC",
-    "Hiragino Sans GB",
-    "Microsoft YaHei",
-    "SimHei",
-    "Noto Sans CJK SC",
-    "Arial Unicode MS",
-    "DejaVu Sans",
-]
-plt.rcParams["axes.unicode_minus"] = False
+# =============================================================================
+# 全局参数（与实验文档/论文一致）
+# =============================================================================
+N = 2000
+T_sim = 450 * 1000          # 主仿真 450 s
+dt = 1
+T_pattern = 50
 
+# 输入脉冲参数
+r_bg = 52.0
+r_spont = 10.0
+pattern_freq = 0.25
+N_pattern_neurons = N // 2
+jitter_std = 1.0
 
-
-# ====================== 【超小参数】快速运行，公式/图表100%匹配实验文档 ======================
-N = 100          # 输入神经元
-T_SIM = 15       # 仿真时长（覆盖初期/中期/后期窗口）
-DT = 0.001       # 1ms步长
-T_PATTERN = 0.05 # 50ms模式
-PATTERN_RATIO = 0.25
-N_PATTERN = 50   # 一半神经元参与模式
-R_BG = 50        # 背景发放率
-R_SPONT = 10     # 自发活动
-JITTER = 0.001   # 1ms抖动
-
-# SRM参数（完全按文档3.6节）
-tau_m = 0.010
-tau_s = 0.0025
-Vth = 500
-ref = 0.001
+# SRM 神经元参数
+tau_m = 10.0
+tau_s = 2.5
+T_thresh = 500
+K1 = 2.0
+K2 = 4.0
+refractory = 1
 w_init = 0.475
-w_min, w_max = 0, 1
-K1, K2 = 2, 4
+w_min, w_max = 0.0, 1.0
 
-# STDP参数（完全按文档3.7节）
-tau_plus = 0.0168
-tau_minus = 0.0337
+# STDP 参数
 a_plus = 0.03125
 a_minus = 0.85 * a_plus
+tau_plus = 16.8
+tau_minus = 33.7
+LTP_WINDOW = 7 * tau_plus      # ~117.6 ms
+LTD_WINDOW = 7 * tau_minus     # ~235.9 ms
 
-# 全局数据
-spike_times = []
-pattern_onsets = []
-is_pattern_neuron = []
-spike_copy = []
+# EPSP 核归一化
+t_max_epsp = tau_m * tau_s / (tau_m - tau_s) * np.log(tau_m / tau_s)
+max_epsp = np.exp(-t_max_epsp / tau_m) - np.exp(-t_max_epsp / tau_s)
+K_epsp = 1.0 / max_epsp
+decay_m = np.exp(-dt / tau_m)
+decay_s = np.exp(-dt / tau_s)
 
-# ====================== 1. 输入脉冲生成（严格按文档2.6流程） ======================
-def generate_input():
-    global spike_times, pattern_onsets, is_pattern_neuron, spike_copy
-    spike_times = [[] for _ in range(N)]
-    is_pattern_neuron = np.zeros(N, bool)
-    pattern_neurons = np.random.choice(N, N_PATTERN, replace=False)
-    is_pattern_neuron[pattern_neurons] = True
+np.random.seed(42)
 
-    # 1. 背景泊松脉冲
-    for i in range(N):
-        n_spk = np.random.poisson(R_BG * T_SIM)
-        spk = np.sort(np.random.rand(n_spk) * T_SIM)
-        spike_times[i] = spk.tolist()
 
-    # 2. 随机选取50ms模板
-    t_temp = np.random.rand() * (T_SIM - T_PATTERN)
-    template = {i:[] for i in pattern_neurons}
-    for i in pattern_neurons:
-        s = np.array(spike_times[i])
-        mask = (s >= t_temp) & (s < t_temp + T_PATTERN)
-        template[i] = s[mask] - t_temp
+# =============================================================================
+# 输入脉冲生成
+# =============================================================================
+def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
+                          n_pattern=N_pattern_neurons):
+    T_sec = T_steps / 1000.0
+    bg_spikes = []
+    for j in range(N):
+        n_spikes = np.random.poisson(r_bg * T_sec)
+        n_spikes = min(n_spikes, T_steps - 1)
+        times = np.sort(np.random.choice(T_steps, size=n_spikes, replace=False))
+        bg_spikes.append(times.astype(np.int32))
 
-    # 3. 随机插入模式
-    n_pat = int((T_SIM / T_PATTERN) * PATTERN_RATIO)
-    candidates = np.arange(0, T_SIM - T_PATTERN, T_PATTERN)
-    pattern_onsets = np.sort(np.random.choice(candidates, n_pat, replace=False))
+    pattern_neurons = np.arange(n_pattern)
 
-    for onset in pattern_onsets:
-        for i in pattern_neurons:
-            rel_spk = template[i]
-            abs_spk = onset + rel_spk + np.random.normal(0, JITTER, len(rel_spk))
-            old = np.array(spike_times[i])
-            mask = (old < onset) | (old >= onset + T_PATTERN)
-            new = np.concatenate([old[mask], abs_spk])
-            spike_times[i] = np.sort(new).tolist()
+    # 截取模板
+    t0_template = np.random.randint(0, T_steps - T_pattern)
+    template = {}
+    for j in pattern_neurons:
+        times = bg_spikes[j]
+        mask = (times >= t0_template) & (times < t0_template + T_pattern)
+        template[j] = (times[mask] - t0_template).astype(np.float64)
 
-    # 4. 加入自发活动
-    for i in range(N):
-        n_sp = np.random.poisson(R_SPONT * T_SIM)
-        sp = np.random.rand(n_sp) * T_SIM
-        all_sp = np.concatenate([spike_times[i], sp])
-        spike_times[i] = np.sort(all_sp).tolist()
+    # 模式插入位置（避免相邻）
+    total_blocks = T_steps // T_pattern
+    n_patterns = max(1, int(total_blocks * freq))
+    order = np.random.permutation(total_blocks)
+    selected_blocks = []
+    for b in order:
+        if all(abs(b - s) >= 2 for s in selected_blocks):
+            selected_blocks.append(b)
+        if len(selected_blocks) == n_patterns:
+            break
+    pattern_starts = sorted([b * T_pattern for b in selected_blocks])
+    pattern_intervals = [(s, s + T_pattern) for s in pattern_starts]
 
-    spike_copy = [x.copy() for x in spike_times]
-    print("✅ 输入脉冲生成完成（符合文档2.6流程）")
+    neuron_spikes = []
+    neuron_types = []
 
-# ====================== 2. SRM核函数（严格按文档3.3/3.4公式） ======================
-def epsc_kernel(t):
-    if t < 0:
-        return 0.0
-    return np.exp(-t/tau_m) - np.exp(-t/tau_s)
+    for j in range(N):
+        bg = bg_spikes[j].astype(np.float64)
+        if j in pattern_neurons:
+            valid = np.ones(len(bg), dtype=bool)
+            for t_start in pattern_starts:
+                valid &= ~((bg >= t_start) & (bg < t_start + T_pattern))
+            final_bg = bg[valid]
 
-def after_spike_kernel(t):
-    if t < 0:
-        return 0.0
-    return Vth * (K1*np.exp(-t/tau_m) - K2*(np.exp(-t/tau_m) - np.exp(-t/tau_s)))
+            pat_list = []
+            for t_start in pattern_starts:
+                rel = template[j].copy()
+                noisy_rel = rel + np.random.randn(len(rel)) * jitter
+                noisy_rel = np.round(noisy_rel).astype(np.int32)
+                abs_t = t_start + noisy_rel
+                abs_t = abs_t[(abs_t >= 0) & (abs_t < T_steps)]
+                pat_list.append(abs_t)
+            pattern_arr = np.concatenate(pat_list) if pat_list else np.array([], dtype=np.int32)
+        else:
+            final_bg, pattern_arr = bg, np.array([], dtype=np.int32)
 
-# ====================== 3. 仿真 + STDP（严格按文档3.5/3.7） ======================
-def run_sim():
-    weights = np.ones(N) * w_init
-    last_spike = -np.inf
-    out_spikes = []
-    mem_record = []
-    time_record = []
+        # 自发活动
+        n_spont = np.random.poisson(r_spont * T_sec)
+        n_spont = min(n_spont, T_steps - 1)
+        spont = np.sort(np.random.choice(T_steps, size=n_spont, replace=False)).astype(np.int32)
 
-    steps = int(T_SIM / DT)
-    for step in range(steps):
-        t = step * DT
-        # 不应期
-        if t - last_spike < ref:
-            mem_record.append(0.0)
-            time_record.append(t)
-            continue
+        # 合并 → 确保全部为 int32
+        all_t = np.concatenate([final_bg.astype(np.int32), pattern_arr, spont])
+        all_typ = np.concatenate([
+            np.zeros(len(final_bg), dtype=np.int8),
+            np.ones(len(pattern_arr), dtype=np.int8),
+            np.zeros(len(spont), dtype=np.int8)
+        ])
+        order_j = np.argsort(all_t)
+        neuron_spikes.append(all_t[order_j])
+        neuron_types.append(all_typ[order_j])
 
-        # 膜电位（文档3.5公式）
-        asp = after_spike_kernel(t - last_spike)
-        epsc_sum = 0.0
-        for i in range(N):
-            s = np.array(spike_times[i])
-            valid = s[s > last_spike]
-            if len(valid) == 0:
-                continue
-            dt_pre = t - valid[-1]
-            epsc_sum += weights[i] * epsc_kernel(dt_pre)
+    # 构建全局时间索引（用于快速按时间步检索）
+    counts = np.zeros(T_steps, dtype=np.int64)
+    for spk in neuron_spikes:
+        if len(spk):
+            np.add.at(counts, spk, 1)
 
-        V = asp + epsc_sum
-        mem_record.append(V)
-        time_record.append(t)
+    time_start = np.zeros(T_steps + 1, dtype=np.int64)
+    time_start[1:] = np.cumsum(counts)
 
-        # 发放 + STDP
-        if V >= Vth:
+    total_spikes = time_start[-1]
+    all_times = np.empty(total_spikes, dtype=np.int32)
+    all_neurons = np.empty(total_spikes, dtype=np.int16)
+    all_types = np.empty(total_spikes, dtype=np.int8)
+
+    pos = time_start[:-1].copy()
+    for j, (spk, typ) in enumerate(zip(neuron_spikes, neuron_types)):
+        for k, t in enumerate(spk):
+            idx = pos[t]
+            all_times[idx] = t
+            all_neurons[idx] = j
+            all_types[idx] = typ[k]
+            pos[t] += 1
+
+    return neuron_spikes, neuron_types, all_times, all_neurons, all_types, time_start, pattern_intervals
+
+
+# =============================================================================
+# SRM + STDP 仿真（优化版）
+# =============================================================================
+def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
+             pattern_intervals, record_windows, w_init_val=w_init,
+             T_steps=T_sim):
+    w = np.full(N, w_init_val, dtype=np.float64)
+    u, v = 0.0, 0.0
+    last_spike = -1
+    refr_until = -1
+
+    output_spikes = []
+    latencies = []
+    membrane_records = [[] for _ in record_windows]
+
+    spike_ptr = np.zeros(N, dtype=np.int32)
+    spike_list = neuron_spikes
+
+    pattern_starts_arr = np.array([s for s, _ in pattern_intervals], dtype=np.int32)
+
+    # 预分配 STDP 缓冲区
+    tj_pre = np.empty(N, dtype=np.int32)
+    tj_post = np.empty(N, dtype=np.int32)
+    has_pre = np.empty(N, dtype=bool)
+    has_post = np.empty(N, dtype=bool)
+
+    for t in range(T_steps):
+        idx0, idx1 = time_start[t], time_start[t + 1]
+
+        if idx0 < idx1:
+            js = all_neurons[idx0:idx1]
+            np.add.at(spike_ptr, js, 1)
+            s = np.sum(w[js])
+        else:
+            s = 0.0
+
+        # EPSP 差分更新
+        u = decay_m * u + s
+        v = decay_s * v + s
+        epsp = K_epsp * (u - v)
+
+        # 发放后电位
+        eta = 0.0
+        if last_spike >= 0:
+            dt_eta = t - last_spike
+            eta = T_thresh * (
+                K1 * np.exp(-dt_eta / tau_m)
+                - K2 * (np.exp(-dt_eta / tau_m) - np.exp(-dt_eta / tau_s))
+            )
+
+        p = eta + epsp
+
+        # 记录膜电位
+        for ri, (t1, t2) in enumerate(record_windows):
+            if t1 <= t < t2:
+                membrane_records[ri].append((t, p))
+
+        # 发放判定
+        if t >= refr_until and p >= T_thresh:
+            output_spikes.append(t)
+
+            # 潜伏期（相对最近模式起点）
+            latency = 0.0
+            ip = np.searchsorted(pattern_starts_arr, t)
+            if ip > 0:
+                s_p = pattern_starts_arr[ip - 1]
+                if t < s_p + T_pattern:
+                    latency = t - s_p
+            latencies.append(latency)
+
+            # 重置
             last_spike = t
-            out_spikes.append(t)
-            # 文档3.7 STDP更新
-            for i in range(N):
-                s = np.array(spike_times[i])
-                # LTP
-                pre_ltp = s[s <= t]
-                if len(pre_ltp) > 0:
-                    dt_ltp = t - pre_ltp[-1]
-                    if dt_ltp < 7 * tau_plus:
-                        weights[i] += a_plus * np.exp(-dt_ltp / tau_plus)
-                # LTD
-                pre_ltd = s[s > t]
-                if len(pre_ltd) > 0:
-                    dt_ltd = pre_ltd[0] - t
-                    if dt_ltd < 7 * tau_minus:
-                        weights[i] -= a_minus * np.exp(-dt_ltd / tau_minus)
-            weights = np.clip(weights, w_min, w_max)
+            refr_until = t + refractory
+            u, v = 0.0, 0.0
 
-    print("✅ 仿真完成（符合文档3.8实现检查）")
-    return out_spikes, mem_record, time_record
+            # ====== STDP（向量化 + 窗口限制）======
+            for j in range(N):
+                ptr = spike_ptr[j]
+                has_pre[j] = ptr > 0
+                has_post[j] = ptr < len(spike_list[j])
+                if has_pre[j]:
+                    tj_pre[j] = spike_list[j][ptr - 1]
+                if has_post[j]:
+                    tj_post[j] = spike_list[j][ptr]
 
-# ====================== 【文档要求4张标准图】严格还原 ======================
-# 图1：输入脉冲栅格图 + 10ms群体发放率 + 单神经元发放率（文档2.7/4.1）
-def plot_figure1_input():
-    fig = plt.figure(figsize=(12, 7), dpi=120)
-    gs = GridSpec(3, 2, width_ratios=[4, 1], height_ratios=[3, 1, 1])
+            # LTP
+            dt_pre = t - tj_pre[has_pre]
+            mask_ltp = dt_pre <= LTP_WINDOW
+            idx_ltp = np.where(has_pre)[0][mask_ltp]
+            if len(idx_ltp):
+                w[idx_ltp] += a_plus * np.exp(-dt_pre[mask_ltp] / tau_plus)
 
-    # 脉冲栅格图
+            # LTD
+            dt_post = tj_post[has_post] - t
+            mask_ltd = (dt_post > 0) & (dt_post <= LTD_WINDOW)
+            idx_ltd = np.where(has_post)[0][mask_ltd]
+            if len(idx_ltd):
+                w[idx_ltd] -= a_minus * np.exp(-dt_post[mask_ltd] / tau_minus)
+
+            # 裁剪
+            w = np.clip(w, w_min, w_max)
+
+    rec_arrays = [
+        (np.array([x[0] for x in rec]) / 1000.0,
+         np.array([x[1] for x in rec]))
+        for rec in membrane_records
+    ]
+    return np.array(output_spikes), np.array(latencies), rec_arrays, w
+
+
+# =============================================================================
+# 评估函数（论文成功率标准）
+# =============================================================================
+def evaluate_trial(output_spikes, pattern_intervals, T_steps=T_sim, eval_last_s=150):
+    t_eval_start = T_steps - eval_last_s * 1000
+    patterns_eval = [(s, e) for s, e in pattern_intervals if s >= t_eval_start]
+    n_pat = len(patterns_eval)
+    if n_pat == 0:
+        return False, 0.0, 999.0, 0
+
+    out_eval = output_spikes[output_spikes >= t_eval_start]
+
+    hits = 0
+    hit_latencies = []
+    for s, e in patterns_eval:
+        mask = (out_eval >= s) & (out_eval < e)
+        if np.any(mask):
+            hits += 1
+            hit_latencies.append(out_eval[mask][0] - s)
+
+    hit_rate = hits / n_pat
+    avg_latency = np.mean(hit_latencies) if hit_latencies else 999.0
+
+    false_alarms = 0
+    for t in out_eval:
+        in_pat = any(s <= t < e for s, e in patterns_eval)
+        if not in_pat:
+            false_alarms += 1
+
+    success = (avg_latency < 10) and (hit_rate >= 0.98) and (false_alarms == 0)
+    return success, hit_rate, avg_latency, false_alarms
+
+
+# =============================================================================
+# 绘图模块
+# =============================================================================
+def plot_fig1(all_times, all_neurons, all_types, neuron_spikes, save_path='fig1_input_pattern.png'):
+    """从2000个中抽取100个（50 pattern + 50 non-pattern），匹配参考图样式。"""
+    np.random.seed(123)
+    pat_ids = np.random.choice(N_pattern_neurons, 50, replace=False)
+    non_ids = np.random.choice(np.arange(N_pattern_neurons, N), 50, replace=False)
+    display_neurons = np.sort(np.concatenate([pat_ids, non_ids]))
+    disp_map = {nid: i for i, nid in enumerate(display_neurons)}
+    is_pat = (display_neurons < N_pattern_neurons)
+
+    t_max_ms = 600
+    mask = np.isin(all_neurons, display_neurons) & (all_times < t_max_ms)
+    t_show = all_times[mask]
+    n_show = np.array([disp_map[n] for n in all_neurons[mask]], dtype=np.int32)
+    typ_show = all_types[mask]
+
+    # 群体发放率（仅这100个神经元）
+    bins = np.arange(0, t_max_ms + 1, 10)
+    counts_100, _ = np.histogram(t_show, bins=bins)
+    rate_100 = counts_100 / (100 * 0.01)  # Hz
+
+    # 单神经元平均发放率
+    avg_rates = np.array([len(neuron_spikes[nid]) / (T_sim / 1000.0) for nid in display_neurons])
+
+    fig = plt.figure(figsize=(10, 8))
+    gs = GridSpec(3, 2, width_ratios=[5, 1], height_ratios=[4, 1, 0], hspace=0.05, wspace=0.08)
+
+    # 上方：栅格图
     ax1 = fig.add_subplot(gs[0, 0])
-    t_view = 1.0
-    for i in range(N):
-        s = np.array([x for x in spike_copy[i] if x < t_view])
-        if len(s) == 0:
-            continue
-        color = "red" if is_pattern_neuron[i] else "blue"
-        ax1.scatter(s, [i]*len(s), c=color, s=1, alpha=0.7)
-    # 灰色标注模式
-    for on in pattern_onsets:
-        if on < t_view:
-            ax1.axvspan(on, on+T_PATTERN, color="gray", alpha=0.2)
-    ax1.set_ylabel("Input Neuron ID")
-    ax1.set_title("图1 输入脉冲栅格图（红=模式，蓝=背景）", fontsize=12)
+    mask_bg = typ_show == 0
+    ax1.scatter(t_show[mask_bg] / 1000.0, n_show[mask_bg] + 1,
+                s=1.5, c='blue', alpha=0.5, label='Background', zorder=1)
+    mask_pt = typ_show == 1
+    ax1.scatter(t_show[mask_pt] / 1000.0, n_show[mask_pt] + 1,
+                s=2.0, c='red', alpha=0.8, label='Pattern', zorder=2)
+    ax1.set_ylabel('# afferent', fontsize=11)
+    ax1.set_xlim(0, 0.6)
+    ax1.set_ylim(0.5, 100.5)
+    ax1.set_yticks([1, 100])
+    ax1.set_xticks([])
+    ax1.legend(loc='upper right', fontsize=8, frameon=False)
 
-    # 10ms群体发放率
+    # 下方：群体平均发放率
     ax2 = fig.add_subplot(gs[1, 0])
-    bin_size = 0.01
-    bins = np.arange(0, t_view, bin_size)
-    pop_rate = []
-    for b in bins[:-1]:
-        cnt = 0
-        for i in range(N):
-            cnt += np.sum((np.array(spike_copy[i]) >= b) & (np.array(spike_copy[i]) < b+bin_size))
-        pop_rate.append(cnt / (N * bin_size))
-    ax2.bar(bins[:-1], pop_rate, width=bin_size, color="black")
-    ax2.set_ylabel("Firing Rate (Hz)")
+    ax2.bar(bins[:-1] / 1000.0, rate_100, width=0.01, color='blue',
+            edgecolor='black', linewidth=0.3)
+    ax2.set_xlabel('t (s)', fontsize=11)
+    ax2.set_ylabel('Firing rate (Hz)', fontsize=11)
+    ax2.set_xlim(0, 0.6)
+    ax2.set_ylim(0, 100)
+    ax2.set_xticks(np.arange(0, 0.7, 0.1))
+    ax2.set_yticks([0, 50, 100])
 
-    # 单神经元发放率
-    ax3 = fig.add_subplot(gs[:, 1])
-    neuron_rates = [len(s)/T_SIM for s in spike_copy]
-    colors = ["red" if is_pattern_neuron[i] else "blue" for i in range(N)]
-    ax3.barh(range(N), neuron_rates, color=colors)
-    ax3.set_xlabel("Firing Rate (Hz)")
+    # 右侧：单神经元平均发放率
+    ax3 = fig.add_subplot(gs[0:2, 1])
+    colors = ['red' if is_pat[i] else 'blue' for i in range(100)]
+    ax3.barh(np.arange(100) + 1, avg_rates, height=1, color=colors,
+             edgecolor='black', linewidth=0.3)
+    ax3.set_xlabel('Firing rate (Hz)', fontsize=11)
+    ax3.set_xlim(0, 100)
+    ax3.set_ylim(0.5, 100.5)
+    ax3.set_yticks([])
+    ax3.set_xticks([0, 50, 100])
+
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[保存] {save_path}")
+
+
+def plot_fig2(mem_recs, pattern_intervals, save_path='fig2_membrane_potential.png'):
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8))
+    labels = ['a', 'b', 'c']
+    ranges = [(0, 1), (13.3, 14.2), (449, 450)]
+
+    for ax, (t_arr, p_arr), lab, (r0, r1) in zip(axes, mem_recs, labels, ranges):
+        ax.plot(t_arr, p_arr, 'b-', linewidth=0.9, label='potential')
+        ax.axhline(T_thresh, c='red', ls='--', linewidth=1.2, label='threshold')
+        ax.axhline(0, c='black', ls=':', linewidth=0.8, label='resting pot.')
+
+        for s, e in pattern_intervals:
+            s_s, e_s = s / 1000.0, e / 1000.0
+            if e_s >= r0 and s_s <= r1:
+                ax.axvspan(max(s_s, r0), min(e_s, r1), color='gray', alpha=0.3)
+
+        ax.set_xlim(r0, r1)
+        ax.set_ylim(-200, 1200)
+        ax.set_ylabel('Potential (a. u.)', fontsize=11)
+        ax.text(0.02, 0.88, lab, transform=ax.transAxes, fontsize=14, fontweight='bold')
+        if ax == axes[0]:
+            ax.legend(loc='upper right', fontsize=8)
+        if ax == axes[-1]:
+            ax.set_xlabel('t (s)', fontsize=11)
 
     plt.tight_layout()
-    plt.savefig("图1_输入脉冲与发放率.png", dpi=200)
-    plt.show()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[保存] {save_path}")
 
-# 图2：三期膜电位（初期0~1s / 中期13.3~14.2s / 后期14.5~15s）（文档4.2）
-def plot_figure2_membrane(out_spikes, mem, time_mem):
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8), dpi=120)
-    stages = [
-        ("(a) 训练初期 0~1s", 0, 1),
-        ("(b) 选择性出现 13.3~14.2s", 13.3, 14.2),
-        ("(c) 训练后期 14.5~15s", 14.5, 15)
+
+def plot_fig3(latencies, save_path='fig3_latency.png'):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(np.arange(len(latencies)), latencies, s=2, c='blue', alpha=0.6)
+    ax.set_xlabel('# discharges', fontsize=11)
+    ax.set_ylabel('Postsynaptic spike latency (ms)', fontsize=11)
+    ax.set_xlim(0, max(3000, len(latencies)))
+    ax.set_ylim(0, 50)
+    ax.set_xticks(np.arange(0, max(3000, len(latencies)) + 1, 500))
+    ax.set_yticks(np.arange(0, 51, 5))
+    ax.grid(False)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[保存] {save_path}")
+
+
+def plot_fig4(name1, vals1, succ1, name2, vals2, succ2, save_path='fig4_sensitivity.png'):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    for ax, name, vals, succ, tag in [
+        (ax1, name1, vals1, succ1, 'a'),
+        (ax2, name2, vals2, succ2, 'b')
+    ]:
+        ax.plot(vals, np.array(succ) * 100, 'o-', c='black',
+                markerfacecolor='white', markeredgecolor='black', markersize=7, linewidth=1.2)
+        ax.set_xlabel(name, fontsize=11)
+        ax.set_ylabel('% of success', fontsize=11)
+        ax.set_ylim(0, 105)
+        ax.set_yticks([0, 50, 100])
+        ax.text(0.05, 0.9, tag, transform=ax.transAxes, fontsize=14, fontweight='bold')
+        ax.grid(False)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[保存] {save_path}")
+
+
+# =============================================================================
+# 参数扫描（真实仿真统计成功率）
+# =============================================================================
+def scan_parameter(param_name, param_values, n_trials=5, T_steps=100 * 1000):
+    results = []
+    print(f"\n>>> 扫描: {param_name} (每点 {n_trials} 次, 单次 {T_steps // 1000}s)")
+    for val in param_values:
+        n_succ = 0
+        for trial in range(n_trials):
+            # 准备参数
+            gen_kwargs = {}
+            w_init_val = w_init
+            if param_name == 'Pattern frequency':
+                gen_kwargs['freq'] = val
+            elif param_name == 'Jitter (ms)':
+                gen_kwargs['jitter'] = val
+            elif param_name == 'Prop. of aff. in pattern':
+                gen_kwargs['n_pattern'] = int(N * val)
+            elif param_name == 'Initial weight':
+                w_init_val = val
+            else:
+                raise ValueError(f"未知参数: {param_name}")
+
+            neuron_spikes, neuron_types, all_times, all_neurons, all_types, time_start, pattern_intervals = \
+                generate_input_spikes(T_steps=T_steps, **gen_kwargs)
+
+            out_spikes, _, _, _ = simulate(
+                neuron_spikes, all_times, all_neurons, all_types, time_start,
+                pattern_intervals, record_windows=[],
+                w_init_val=w_init_val, T_steps=T_steps
+            )
+            success, _, _, _ = evaluate_trial(out_spikes, pattern_intervals, T_steps=T_steps, eval_last_s=50)
+            if success:
+                n_succ += 1
+        rate = n_succ / n_trials
+        results.append(rate)
+        print(f"    {param_name}={val:.3f} => 成功率 {rate * 100:.0f}%")
+    return results
+
+
+# =============================================================================
+# 主程序
+# =============================================================================
+if __name__ == "__main__":
+    # -------------------- 阶段1：主仿真 450s（图1/2/3） --------------------
+    print("=" * 60)
+    print("阶段1：主仿真 (450s) —— 生成图1、图2、图3")
+    print("=" * 60)
+
+    t0 = time.time()
+    neuron_spikes, neuron_types, all_times, all_neurons, all_types, time_start, pattern_intervals = \
+        generate_input_spikes()
+    print(f"[1/4] 输入脉冲生成完成，耗时 {time.time() - t0:.2f} s")
+
+    record_windows = [
+        (0, 1000),
+        (13300, 14200),
+        (449000, 450000)
     ]
 
-    for ax, (title, t1, t2) in zip(axes, stages):
-        mask = (np.array(time_mem) >= t1) & (np.array(time_mem) <= t2)
-        t_plt = np.array(time_mem)[mask]
-        v_plt = np.array(mem)[mask]
-        ax.plot(t_plt, v_plt, "b", linewidth=1, label="膜电位")
-        ax.axhline(Vth, color="r", linestyle="--", linewidth=1, label="发放阈值")
-        ax.axhline(0, color="k", linestyle="--", linewidth=0.8, label="静息电位")
-        # 灰色模式区间
-        for on in pattern_onsets:
-            if t1 <= on <= t2:
-                ax.axvspan(on, on+T_PATTERN, color="gray", alpha=0.2)
-        ax.set_title(title, fontsize=11)
-        ax.set_ylabel("Membrane Potential")
-        ax.legend(loc="upper right")
-    axes[-1].set_xlabel("Time (s)")
-    plt.suptitle("图2 学习三期膜电位变化", fontsize=12)
-    plt.tight_layout()
-    plt.savefig("图2_膜电位三期图.png", dpi=200)
-    plt.show()
+    t0 = time.time()
+    out_spikes, latencies, mem_recs, final_w = simulate(
+        neuron_spikes, all_times, all_neurons, all_types, time_start,
+        pattern_intervals, record_windows
+    )
+    print(f"[2/4] 仿真完成，输出脉冲 {len(out_spikes)} 个，耗时 {time.time() - t0:.2f} s")
 
-# 图3：响应潜伏期变化（文档4.3）
-def plot_figure3_latency(out_spikes):
-    latencies = []
-    for t in out_spikes:
-        lat = 0
-        for on in pattern_onsets:
-            if on <= t <= on + T_PATTERN:
-                lat = (t - on) * 1000  # 转ms
-                break
-        latencies.append(lat)
+    success, hit_rate, avg_lat, fa = evaluate_trial(out_spikes, pattern_intervals)
+    print(f"[评估] 成功={success} | 命中率={hit_rate * 100:.1f}% | "
+          f"平均潜伏期={avg_lat:.2f}ms | 误报={fa}")
 
-    plt.figure(figsize=(9, 4), dpi=120)
-    plt.plot(range(len(latencies)), latencies, "b-", linewidth=1)
-    plt.xlabel("# of Discharges 发放次数", fontsize=11)
-    plt.ylabel("Latency (ms) 潜伏期", fontsize=11)
-    plt.title("图3 响应潜伏期随学习变化", fontsize=12)
-    plt.grid(alpha=0.3)
-    plt.savefig("图3_潜伏期曲线.png", dpi=200)
-    plt.show()
+    t0 = time.time()
+    plot_fig1(all_times, all_neurons, all_types, neuron_spikes)
+    plot_fig2(mem_recs, pattern_intervals)
+    plot_fig3(latencies)
+    print(f"[3/4] 图1/2/3 绘制完成，耗时 {time.time() - t0:.2f} s")
 
-# 图4：参数敏感性分析（5个子图，完全匹配原图）
-def plot_figure4_sensitivity():
-    fig, axes = plt.subplots(1, 5, figsize=(16, 4), dpi=120)
-    plt.subplots_adjust(wspace=0.4)
+    # -------------------- 阶段2：参数扫描（图4） --------------------
+    print("\n" + "=" * 60)
+    print("阶段2：参数敏感性扫描 —— 生成图4")
+    print("提示：若电脑较慢，请下调 T_SCAN 和 N_TRIALS")
+    print("=" * 60)
 
-    # 子图a：模式出现频率
-    freq = np.array([0.05, 0.1, 0.15, 0.2, 0.3, 0.5])
-    succ_a = np.array([30, 70, 90, 95, 98, 100])
-    axes[0].plot(freq, succ_a, "k-", marker="o", markersize=8, markerfacecolor="white")
-    axes[0].set_xlabel("Pattern frequency")
-    axes[0].set_ylabel("% of success")
-    axes[0].set_title("a")
-    axes[0].set_ylim(0, 110)
-    axes[0].set_xticks([0.1, 0.2, 0.3, 0.4, 0.5])
+    # 可调：扫描时长与次数（越大越准、越慢）
+    T_SCAN = 100 * 1000      # 每次仿真 100 秒（论文用 450s，扫描时可缩短）
+    N_TRIALS = 3           # 每个参数值重复 5 次
 
-    # 子图b：时间抖动大小
-    jitter = np.array([0, 1, 2, 3, 4, 5, 6])
-    succ_b = np.array([100, 98, 95, 85, 55, 15, 0])
-    axes[1].plot(jitter, succ_b, "k-", marker="o", markersize=8, markerfacecolor="white")
-    axes[1].set_xlabel("Jitter (ms)")
-    axes[1].set_title("b")
-    axes[1].set_ylim(0, 110)
-    axes[1].set_xticks([0, 2, 4, 6])
+    # 参数1：模式出现频率
+    freq_vals = [0.20, 0.25, 0.30, 0.40, 0.50]
 
-    # 子图c：参与模式的输入神经元比例
-    prop = np.array([0.2, 0.3, 0.4, 0.5, 0.6])
-    succ_c = np.array([10, 45, 75, 95, 100])
-    axes[2].plot(prop, succ_c, "k-", marker="o", markersize=8, markerfacecolor="white")
-    axes[2].set_xlabel("Prop. of aff. in pattern")
-    axes[2].set_title("c")
-    axes[2].set_ylim(0, 110)
-    axes[2].set_xticks([0.2, 0.4, 0.6])
+    t0 = time.time()
+    succ_freq = scan_parameter('Pattern frequency', freq_vals, n_trials=N_TRIALS, T_steps=T_SCAN)
+    print(f"频率扫描耗时 {time.time() - t0:.1f} s")
 
-    # 子图d：初始权重
-    init_w = np.array([0.3, 0.33, 0.37, 0.4, 0.43, 0.46])
-    succ_d = np.array([20, 55, 65, 85, 95, 100])
-    axes[3].plot(init_w, succ_d, "k-", marker="o", markersize=8, markerfacecolor="white")
-    axes[3].set_xlabel("Initial weight")
-    axes[3].set_title("d")
-    axes[3].set_ylim(0, 110)
-    axes[3].set_xticks([0.3, 0.35, 0.4, 0.45])
+    # 参数2：初始权重
+    weight_vals = [0.40, 0.43, 0.46, 0.48, 0.50]
+    t0 = time.time()
+    succ_weight = scan_parameter('Initial weight', weight_vals, n_trials=N_TRIALS, T_steps=T_SCAN)
+    print(f"权重扫描耗时 {time.time() - t0:.1f} s")
 
-    # 子图e：脉冲删除比例
-    deletion = np.array([0, 0.1, 0.2, 0.3])
-    succ_e = np.array([100, 85, 50, 0])
-    axes[4].plot(deletion, succ_e, "k-", marker="o", markersize=8, markerfacecolor="white")
-    axes[4].set_xlabel("Spike deletion")
-    axes[4].set_title("e")
-    axes[4].set_ylim(0, 110)
-    axes[4].set_xticks([0, 0.1, 0.2, 0.3])
+    plot_fig4('Pattern frequency', freq_vals, succ_freq,
+              'Initial weight', weight_vals, succ_weight)
 
-    plt.suptitle("图4 参数变化对学习成功率的影响", fontsize=12)
-    plt.tight_layout()
-    plt.savefig("图4_参数敏感性分析.png", dpi=200)
-    plt.show()
-
-# ====================== 主运行 ======================
-if __name__ == "__main__":
-    generate_input()
-    out_spikes, mem_record, time_record = run_sim()
-    # 绘制实验要求的全部4张标准图
-    plot_figure1_input()
-    plot_figure2_membrane(out_spikes, mem_record, time_record)
-    plot_figure3_latency(out_spikes)
-    plot_figure4_sensitivity()
-    print("🎉 全部4张实验标准图生成完成！")
+    print("\n[完成] 所有图表已生成！")
