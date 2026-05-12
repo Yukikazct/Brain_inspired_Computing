@@ -94,8 +94,6 @@ def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
     # 3. 从背景中随机截取50ms片段作为模式模板
     # -------------------------------------------------------------------------
     print("  提取模式模板...")
-    # 保证模板区间内所有模式神经元都有至少一个脉冲（论文机制）
-    # 如果某个神经元没有脉冲，则在模板内随机添加一个脉冲
     max_attempts = 20
     t0_template = None
     template = None
@@ -109,7 +107,7 @@ def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
             mask = (times >= t0) & (times < t0 + T_pattern)
             rel_times = times[mask] - t0
             if len(rel_times) == 0:
-                # 若没有脉冲，添加一个随机脉冲（论文中的强制发放机制）
+                # 若没有脉冲，添加一个随机脉冲
                 rel_times = np.array([np.random.uniform(0, T_pattern)])
                 ok = False   # 标记这不是完美模板，但仍然可用
             template_candidate[j] = rel_times.astype(np.float64)
@@ -134,7 +132,7 @@ def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
     pattern_intervals = [(s, s + T_pattern) for s in pattern_starts]
 
     # -------------------------------------------------------------------------
-    # 5. 构建最终脉冲序列（复制-粘贴模式，保留未参与模式神经元的背景）
+    # 5. 构建最终脉冲序列
     # -------------------------------------------------------------------------
     print("  合并脉冲序列...")
     neuron_spikes = []
@@ -223,7 +221,7 @@ def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
 
 
 # =============================================================================
-# SRM + STDP 仿真（保持用户原有逻辑，仅优化微小细节）
+# SRM + STDP 仿真
 # =============================================================================
 def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
              pattern_intervals, record_windows, w_init_val=w_init,
@@ -366,7 +364,7 @@ def evaluate_trial(output_spikes, pattern_intervals, T_steps=T_sim, eval_last_s=
 
 
 # =============================================================================
-# 绘图模块（匹配论文样式）
+# 绘图模块
 # =============================================================================
 def plot_fig1(all_times, all_neurons, all_types, neuron_spikes, pattern_neurons,
               save_path='fig1_input_pattern.png'):
