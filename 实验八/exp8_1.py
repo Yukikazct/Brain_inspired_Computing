@@ -240,7 +240,6 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
 
     pattern_starts_arr = np.array([s for s, _ in pattern_intervals], dtype=np.int32)
 
-    # 预分配 STDP 缓冲区
     tj_pre = np.empty(N, dtype=np.int32)
     tj_post = np.empty(N, dtype=np.int32)
     has_pre = np.empty(N, dtype=bool)
@@ -272,16 +271,14 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
 
         p = eta + epsp
 
-        # 记录膜电位
-        for ri, (t1, t2) in enumerate(record_windows):
-            if t1 <= t < t2:
-                membrane_records[ri].append((t, p))
-
-        # 发放判定
+        # ================================================================
+        # 发放判定与记录
+        # ================================================================
         if t >= refr_until and p >= T_thresh:
+            # ===== 发放！=====
             output_spikes.append(t)
 
-            # 潜伏期（相对最近模式起点）
+            # ===== 潜伏期计算 =====
             latency = 0.0
             ip = np.searchsorted(pattern_starts_arr, t)
             if ip > 0:
@@ -290,12 +287,21 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
                     latency = t - s_p
             latencies.append(latency)
 
-            # 重置
+            # ===== 膜电位峰值记录 =====
             last_spike = t
             refr_until = t + refractory
             u, v = 0.0, 0.0
 
-            # STDP 更新
+            # 发放后电位在 dt=0 时的峰值
+            eta_spike = T_thresh * K1  # = 1000
+            p_record = eta_spike
+
+            # 记录（只记录一次，发放时刻）
+            for ri, (t1, t2) in enumerate(record_windows):
+                if t1 <= t < t2:
+                    membrane_records[ri].append((t, p_record))
+
+            # ===== STDP 更新（发放后才更新！核心！）=====
             for j in range(N):
                 ptr = spike_ptr[j]
                 has_pre[j] = ptr > 0
@@ -322,13 +328,19 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
             # 裁剪
             w = np.clip(w, w_min, w_max)
 
+        else:
+            # ===== 未发放，正常记录膜电位 =====
+            for ri, (t1, t2) in enumerate(record_windows):
+                if t1 <= t < t2:
+                    membrane_records[ri].append((t, p))
+            # 未发放时不做 STDP 更新
+
     rec_arrays = [
         (np.array([x[0] for x in rec]) / 1000.0,
          np.array([x[1] for x in rec]))
         for rec in membrane_records
     ]
     return np.array(output_spikes), np.array(latencies), rec_arrays, w
-
 
 # =============================================================================
 # 评估函数（论文成功率标准）
