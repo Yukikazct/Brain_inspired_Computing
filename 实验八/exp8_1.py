@@ -48,8 +48,8 @@ a_plus = 0.03125
 a_minus = 0.85 * a_plus
 tau_plus = 16.8
 tau_minus = 33.7
-LTP_WINDOW = 7 * tau_plus      # ~117.6 ms
-LTD_WINDOW = 7 * tau_minus     # ~235.9 ms
+LTP_WINDOW = 7 * tau_plus
+LTD_WINDOW = 7 * tau_minus
 
 # EPSP 核归一化
 t_max_epsp = tau_m * tau_s / (tau_m - tau_s) * np.log(tau_m / tau_s)
@@ -62,7 +62,7 @@ np.random.seed(42)
 
 
 # =============================================================================
-# 输入脉冲生成（固定背景率 + 模式复制粘贴）
+# 输入脉冲生成
 # =============================================================================
 def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
                           n_pattern=N_pattern_neurons, seed=None):
@@ -109,15 +109,14 @@ def generate_input_spikes(T_steps=T_sim, freq=pattern_freq, jitter=jitter_std,
             if len(rel_times) == 0:
                 # 若没有脉冲，添加一个随机脉冲
                 rel_times = np.array([np.random.uniform(0, T_pattern)])
-                ok = False   # 标记这不是完美模板，但仍然可用
+                ok = False
             template_candidate[j] = rel_times.astype(np.float64)
-        # 接受第一个模板，不强求完美覆盖
         t0_template = t0
         template = template_candidate
         break
 
     # -------------------------------------------------------------------------
-    # 4. 确定模式插入位置（避免相邻）
+    # 4. 确定模式插入位置
     # -------------------------------------------------------------------------
     total_blocks = T_steps // T_pattern
     n_patterns = max(1, int(total_blocks * freq))
@@ -301,7 +300,7 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
                 if t1 <= t < t2:
                     membrane_records[ri].append((t, p_record))
 
-            # ===== STDP 更新（发放后才更新！核心！）=====
+            # ===== STDP 更新 =====
             for j in range(N):
                 ptr = spike_ptr[j]
                 has_pre[j] = ptr > 0
@@ -343,7 +342,7 @@ def simulate(neuron_spikes, all_times, all_neurons, all_types, time_start,
     return np.array(output_spikes), np.array(latencies), rec_arrays, w
 
 # =============================================================================
-# 评估函数（论文成功率标准）
+# 评估函数
 # =============================================================================
 def evaluate_trial(output_spikes, pattern_intervals, T_steps=T_sim, eval_last_s=150):
     t_eval_start = T_steps - eval_last_s * 1000
@@ -581,7 +580,7 @@ if __name__ == "__main__":
      time_start, pattern_intervals, pattern_neurons) = generate_input_spikes()
     print(f"[1/4] 输入脉冲生成完成，耗时 {time.time() - t0:.2f} s")
 
-    # 膜电位记录窗口（根据模式出现情况微调）
+    # 膜电位记录窗口
     record_windows = [
         (0, 2000),          # 初期 0-2s
         (13000, 15000),     # 中期 13-15s
@@ -607,11 +606,10 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 60)
     print("阶段2：参数敏感性扫描 —— 生成图4")
-    print("提示：完整扫描耗时较长，可选择性运行或调低T_SCAN、N_TRIALS")
     print("=" * 60)
 
-    # 扫描时长和次数（可根据需要调整）
-    T_SCAN = 200 * 1000   # 每次仿真200秒（比450秒快，但仍足够显示趋势）
+    # 扫描时长和次数
+    T_SCAN = 200 * 1000   # 每次仿真200秒
     N_TRIALS = 5          # 每个参数值重复5次
 
     # 参数1：模式出现频率
@@ -626,7 +624,7 @@ if __name__ == "__main__":
     succ_weight = scan_parameter('Initial weight', weight_vals, n_trials=N_TRIALS, T_steps=T_SCAN)
     print(f"权重扫描耗时 {time.time() - t0:.1f} s")
 
-    # 绘制两个参数的图（满足实验最低要求）
+    # 绘制两个参数的图
     plot_fig4_two_params('Pattern frequency', freq_vals, succ_freq,
                          'Initial weight', weight_vals, succ_weight)
 
