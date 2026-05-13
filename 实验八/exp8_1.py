@@ -522,9 +522,7 @@ def plot_fig4_two_params(name1, vals1, succ1, name2, vals2, succ2,
 # 参数扫描（固定背景率版本，速度已足够）
 # =============================================================================
 def scan_parameter(param_name, param_values, n_trials=5, T_steps=200 * 1000):
-    """
-    参数扫描，T_steps可调（主仿真450s，扫描可用200s节省时间）
-    """
+
     results = []
     print(f"\n>>> 扫描: {param_name} (每点 {n_trials} 次, 单次 {T_steps // 1000}s)")
     for val in param_values:
@@ -544,7 +542,6 @@ def scan_parameter(param_name, param_values, n_trials=5, T_steps=200 * 1000):
             elif param_name == 'Initial weight':
                 w_init_val = val
             elif param_name == 'Spike deletion':
-                # 脉冲删除简化：通过降低模式频率模拟，实际更复杂，可选
                 gen_kwargs['freq'] = pattern_freq * (1 - val)
             else:
                 raise ValueError(f"未知参数: {param_name}")
@@ -610,7 +607,7 @@ if __name__ == "__main__":
 
     # 扫描时长和次数
     T_SCAN = 200 * 1000   # 每次仿真200秒
-    N_TRIALS = 5          # 每个参数值重复5次
+    N_TRIALS = 10          # 每个参数值重复10次
 
     # 参数1：模式出现频率
     freq_vals = [0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50]
