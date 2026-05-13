@@ -79,7 +79,7 @@ experiment_package/
 
 ```bash
 # 1. 解压文件
-cd experiment_package
+cd experiment_code
 
 # 2. 安装依赖（如尚未安装）
 pip install numpy matplotlib
@@ -102,4 +102,4 @@ python main.py
 
 ## 作者信息
 
-本代码基于实验文档/论文参数实现，用于神经计算课程实验报告。
+本代码基于实验文档/论文参数实现，用于类脑计算课程实验报告。

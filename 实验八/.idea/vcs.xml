@@ -3,6 +3,5 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$/.." vcs="Git" />
     <mapping directory="$PROJECT_DIR$/STDP-Finds-Start-of-Patterns" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/STDP复现" vcs="Git" />
   </component>
 </project>
