@@ -1,6 +1,6 @@
-"""Experiment 1: Single pattern, 3 independent output neurons (no lateral inhibition).
+"""实验1：单模式、3个独立输出神经元（无侧向抑制）。
 
-Tests whether simply adding more output neurons leads to diverse representations.
+测试仅增加输出神经元数量是否会产生多样化的表征。
 """
 
 import numpy as np
@@ -16,54 +16,54 @@ from utils import get_params_single_pattern, ensure_figure_dir, FIGURE_DIR
 
 def run_experiment1():
     print("=" * 60)
-    print("Experiment 1: Single pattern, 3 INDEPENDENT neurons (no inhibition)")
+    print("实验1：单模式、3个独立神经元（无抑制）")
     print("=" * 60)
 
     ensure_figure_dir()
 
-    # Parameters: no lateral inhibition
+    # 参数：无侧向抑制
     params = get_params_single_pattern(inhib_strength=0.0, random_state=42)
 
-    print(f"\nParameters:")
-    print(f"  nAfferent={params.nAfferent}, nPattern={params.nPattern}")
-    print(f"  nNeuron={params.nNeuron}, inhibStrength={params.inhibStrength}")
-    print(f"  T={params.T:.1f}s, threshold={params.threshold:.1f}")
+    print(f"\n参数:")
+    print(f"  输入神经元={params.nAfferent}, 模式数={params.nPattern}")
+    print(f"  输出神经元={params.nNeuron}, 抑制强度={params.inhibStrength}")
+    print(f"  T={params.T:.1f}s, 阈值={params.threshold:.1f}")
 
-    # Generate spike train
-    print("\n[1/4] Generating spike train...")
+    # 生成脉冲序列
+    print("\n[1/4] 生成脉冲序列...")
     spikeList, afferentList = generate_spike_train(params)
 
-    # Initialize simulation
-    print("\n[2/4] Initializing simulation...")
+    # 初始化仿真
+    print("\n[2/4] 初始化仿真...")
     sim = Simulation(params)
     sim.initialize(spikeList)
 
-    # Run simulation
-    print("\n[3/4] Running simulation...")
+    # 运行仿真
+    print("\n[3/4] 运行仿真...")
     sim.run(spikeList, afferentList)
 
-    # Report firing counts
-    print("\nFiring counts:")
+    # 报告发放次数
+    print("\n发放次数:")
     for i, neuron in enumerate(sim.neurons):
-        print(f"  Neuron {i + 1}: {int(neuron.nFiring)} firings")
+        print(f"  神经元 {i + 1}: {int(neuron.nFiring)} 次发放")
 
-    # Analyze
-    print("\n[4/4] Analyzing and plotting...")
+    # 分析
+    print("\n[4/4] 分析和绘图...")
     latency, HR, FA, final_latency = compute_latencies(sim.neurons, params)
 
-    print("\nHit rates and false alarm rates:")
+    print("\n命中率和误报率:")
     for i in range(params.nNeuron):
-        print(f"  Neuron {i + 1}: HR={HR[0, i]:.3f}, FA={FA[0, i]:.2f} Hz, "
-              f"final latency={final_latency[0, i] * 1000 if not np.isnan(final_latency[0, i]) else 'N/A'} ms")
+        print(f"  神经元 {i + 1}: HR={HR[0, i]:.3f}, FA={FA[0, i]:.2f} Hz, "
+              f"最终潜伏期={final_latency[0, i] * 1000 if not np.isnan(final_latency[0, i]) else 'N/A'} ms")
 
-    # Plot
+    # 绘图
     plot_latency_subplots(latency, params,
-                          title_prefix="Part 1: No lateral inhibition",
+                          title_prefix="实验1：无侧向抑制",
                           filename=os.path.join(FIGURE_DIR, "exp1_independent.png"),
                           nNeuron=params.nNeuron, nPattern=1,
                           HR=HR, FA=FA)
 
-    # Save results
+    # 保存结果
     results = {
         'params': params,
         'latency': latency,
@@ -78,7 +78,7 @@ def run_experiment1():
     with open(save_path, 'wb') as f:
         pickle.dump(results, f)
 
-    print("\nExperiment 1 complete.")
+    print("\n实验1 完成。")
     return results
 
 

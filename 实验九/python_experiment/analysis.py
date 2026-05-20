@@ -1,33 +1,33 @@
-"""Analysis utilities: latency computation, hit rate, false alarm rate."""
+"""分析工具：潜伏期计算、命中率、误报率。"""
 
 import numpy as np
 
 
 def compute_latencies(neurons, params):
-    """Compute response latencies for each (pattern, neuron) pair.
+    """计算每个（模式，神经元）对的响应潜伏期。
 
-    Parameters
+    参数
     ----------
-    neurons : list of Neuron
+    neurons : Neuron列表
     params : Params
 
-    Returns
+    返回
     -------
     latency : dict  {(pat, neur): ndarray}
-        Latency values for each firing (0 = false alarm).
+        每次发放的潜伏期值（0 = 误报）。
     HR : ndarray  (nPattern, nNeuron)
-        Hit rates.
+        命中率。
     FA : ndarray  (nPattern, nNeuron)
-        False alarm rates (Hz).
+        误报率 (Hz)。
     final_latency : ndarray  (nPattern, nNeuron)
-        Mean latency in the final third of simulation (NaN if not a success).
+        仿真最后三分之一阶段的平均潜伏期（非成功神经元为NaN）。
     """
     nPattern = params.nPattern
     nNeuron = len(neurons)
     T = params.T
     nRun = params.nRun
 
-    # Range for evaluation: last run
+    # 评估范围：最后一个run
     eval_start = (nRun - 1) * T
     eval_end = nRun * T
 
@@ -50,32 +50,31 @@ def compute_latencies(neurons, params):
             posCopyPaste = params.posCopyPaste[pat]
 
             for ft in firingTimes:
-                # Determine which run this firing belongs to
+                # 确定此次发放属于哪个run
                 run_idx = int(np.ceil(ft / T)) - 1
                 if run_idx < 0:
                     run_idx = 0
 
-                # Determine which pattern window it falls in
+                # 确定它落在哪个模式窗口中
                 period = int(np.ceil((ft - run_idx * T) / params.copyPasteDuration))
 
-                # Check if this is a hit
                 if period - 1 in posCopyPaste:
-                    # Hit: latency relative to pattern start
+                    # 命中：潜伏期相对于模式起始
                     lat = ft - run_idx * T - (period - 1) * params.copyPasteDuration
                     lat_vals.append(lat)
                 else:
-                    # False alarm (or out-of-run reference)
+                    # 误报
                     lat_vals.append(0.0)
 
             latency[(pat, neur_idx)] = np.array(lat_vals)
 
-            # Compute HR and FA in the evaluation window
+            # 在评估窗口中计算HR和FA
             in_window = (firingTimes >= eval_start) & (firingTimes < eval_end)
             if np.any(in_window):
                 lat_arr = np.array(lat_vals)
                 hits = np.sum((lat_arr > 0) & in_window)
 
-                # Count total pattern occurrences in eval window
+                # 统计评估窗口中的模式出现次数
                 n_pattern_occurrences = np.sum(
                     (np.array(posCopyPaste) * params.copyPasteDuration +
                      (nRun - 1) * T >= eval_start) &
@@ -89,7 +88,7 @@ def compute_latencies(neurons, params):
                 total_firings = np.sum(in_window)
                 FA[pat, neur_idx] = (total_firings - hits) / (eval_end - eval_start)
 
-                # Final latency: last third of eval window
+                # 最终潜伏期：评估窗口最后三分之一
                 final_third_start = eval_start + 2.0 / 3.0 * (eval_end - eval_start)
                 in_final = (firingTimes >= final_third_start) & (firingTimes < eval_end)
                 if np.any(in_final):
@@ -102,23 +101,23 @@ def compute_latencies(neurons, params):
 
 
 def identify_successful_neurons(HR, FA, hr_threshold=0.9, fa_threshold=1.0):
-    """Identify neurons that successfully learned patterns.
+    """识别成功学习了模式的神经元。
 
-    Returns
+    返回
     -------
     success : ndarray (nPattern, nNeuron)
-        Boolean mask of successful (pattern, neuron) pairs.
+        成功（模式，神经元）对的布尔掩码。
     """
     return (HR > hr_threshold) & (FA < fa_threshold)
 
 
 def compute_latency_differences(final_latency, success_mask):
-    """Compute adjacent latency differences for successful neurons.
+    """计算成功神经元之间的相邻潜伏期差异。
 
-    Returns
+    返回
     -------
-    diffs : list of float
-        Latency differences between adjacent successful neurons (sorted by latency).
+    diffs : float列表
+        相邻成功神经元之间的潜伏期差异（按潜伏期排序）。
     """
     nPattern = final_latency.shape[0]
     diffs = []

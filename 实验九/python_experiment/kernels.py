@@ -1,22 +1,20 @@
-"""Kernel functions: EPSP, PSS, IPSP for SRM/LIF neuron model."""
+"""核函数：SRM/LIF神经元模型的EPSP、PSS、IPSP核。"""
 
 import numpy as np
 
 
 def psp_kernel(t_array, tau_s, tau_m):
-    """Double-exponential PSP kernel (Gerstner 2002).
+    """双指数PSP核（Gerstner 2002）。
 
-    K(t) = (exp(-t/tau_m) - exp(-t/tau_s)) * norm
-    normalized so max = 1.
+    K(t) = (exp(-t/tau_m) - exp(-t/tau_s)) * 归一化系数
+    归一化使最大值为1。
     """
     t = np.asarray(t_array, dtype=np.float64)
-    # Avoid division by zero when tau_s == tau_m
     if abs(tau_s - tau_m) < 1e-15:
         kernel = (t / tau_s) * np.exp(1 - t / tau_s)
     else:
         kernel = np.exp(-t / tau_m) - np.exp(-t / tau_s)
     kernel[t < 0] = 0.0
-    # Normalize
     max_val = np.max(kernel)
     if max_val > 0:
         kernel = kernel / max_val
@@ -24,11 +22,10 @@ def psp_kernel(t_array, tau_s, tau_m):
 
 
 def make_epsp_kernel(params):
-    """Build normalized EPSP kernel."""
+    """构建归一化的EPSP核。"""
     n_kernel = int(params.epspCut * params.tm / params.tmpResolution) + 1
     t_kernel = np.arange(n_kernel) * params.tmpResolution
     kernel = psp_kernel(t_kernel, params.ts, params.tm)
-    # Normalize to max = 1
     max_val = np.max(kernel)
     if max_val > 0:
         kernel = kernel / max_val
@@ -37,7 +34,7 @@ def make_epsp_kernel(params):
 
 
 def make_pss_kernel(params):
-    """Build post-synaptic spike (AHP) kernel.
+    """构建发放后电位（AHP）核。
 
     PSS = pss_coeff_exp * exp(-t/tm) + pss_coeff_dexp * psp_kernel(t, ts, tm)
     """
@@ -49,7 +46,7 @@ def make_pss_kernel(params):
 
 
 def make_ipsp_kernel(params):
-    """Build IPSP kernel (same as EPSP by default)."""
+    """构建IPSP核（默认与EPSP相同）。"""
     n_kernel = int(params.epspCut * params.tm / params.tmpResolution) + 1
     t_kernel = np.arange(n_kernel) * params.tmpResolution
     if params.ipspKernelType == "epsp":
@@ -59,5 +56,4 @@ def make_ipsp_kernel(params):
             kernel = kernel / max_val
         return kernel
     else:
-        # Custom IPSP kernel could go here
         return psp_kernel(t_kernel, params.ts, params.tm)

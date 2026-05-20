@@ -1,16 +1,21 @@
-"""Spike train generation with embedded repeating patterns.
+"""脉冲序列生成，内嵌重复模式。
 
-Vectorized approach: generates background for all afferents at once,
-then embeds patterns. Only participating afferents have spikes replaced.
+基于 Masquelier et al. (2009) 的 copy-paste 方法：
+1. 为所有输入神经元生成背景泊松脉冲
+2. 一次性嵌入模式（全局向量化处理）
+3. 仅修改参与模式的输入神经元的脉冲
 """
 
 import numpy as np
 
 
 def generate_spike_train(params):
-    """Generate full spike train with embedded patterns.
+    """生成带嵌入模式的完整脉冲序列。
 
-    Returns spikeList, afferentList (2 values).
+    返回
+    -------
+    spikeList : ndarray  排序后的脉冲时间
+    afferentList : ndarray  脉冲对应的输入神经元索引（0起始）
     """
     rng = np.random.RandomState(params.randomState)
 
@@ -20,13 +25,13 @@ def generate_spike_train(params):
     jitter = params.jitter
     max_total_rate = params.maxFiringRate + params.spontaneousActivity
 
-    # ── Step 1: Background spikes ──
-    print(f"  Generating background (max rate={max_total_rate:.0f}Hz, "
+    # ── 第1步：生成背景脉冲 ──
+    print(f"  生成背景脉冲 (最大发放率={max_total_rate:.0f}Hz, "
           f"T={T_total:.1f}s, N={nAfferent})...")
 
     afferent_rates = rng.uniform(0, params.maxFiringRate, nAfferent) + params.spontaneousActivity
     mean_rate = np.mean(afferent_rates)
-    print(f"  Mean rate: {mean_rate:.1f} Hz")
+    print(f"  平均发放率: {mean_rate:.1f} Hz")
 
     n_candidates = int(max_total_rate * T_total * nAfferent * 1.05)
     cand_times = rng.uniform(0, T_total, n_candidates)
@@ -38,13 +43,13 @@ def generate_spike_train(params):
     spikeList = cand_times[mask]
     afferentList = cand_afferents[mask]
 
-    print(f"  Generated {len(spikeList)} background spikes "
-          f"(expected ~{mean_rate * T_total * nAfferent:.0f})")
+    print(f"  生成了 {len(spikeList)} 个背景脉冲 "
+          f"(预期约 {mean_rate * T_total * nAfferent:.0f})")
 
-    # ── Step 2: Pattern embedding ──
-    print(f"  Embedding {params.nPattern} pattern(s)...")
+    # ── 第2步：嵌入模式 ──
+    print(f"  嵌入 {params.nPattern} 个模式...")
 
-    # Build participating sets
+    # 构建每个模式的参与神经元集合
     participating_sets = {}
     for pat in range(params.nPattern):
         if params.nPattern == 1:
@@ -56,7 +61,7 @@ def generate_spike_train(params):
                     p_set.add(a)
             participating_sets[pat] = p_set
 
-    # Extract templates from first occurrence of each pattern
+    # 从每个模式的首次出现中提取模板
     pattern_templates = {}
     for pat in range(params.nPattern):
         posList = params.posCopyPaste.get(pat, [])
@@ -77,7 +82,7 @@ def generate_spike_train(params):
                 templates[a] = rel_times.copy()
         pattern_templates[pat] = templates
 
-    # Apply copy-delete-paste: only delete spikes from PARTICIPATING afferents
+    # 执行 copy-delete-paste：只删除参与神经元的脉冲
     all_new_spikes = []
     all_new_afferents = []
     keep_mask = np.ones(len(spikeList), dtype=bool)
@@ -95,13 +100,13 @@ def generate_spike_train(params):
                 win_start = run_offset + p_idx * cpDuration
                 win_end = win_start + cpDuration
 
-                # Only remove spikes from PARTICIPATING afferents in this window
+                # 仅删除该窗口中参与神经元的脉冲
                 if len(participating_list) > 0:
                     in_win = ((spikeList >= win_start) & (spikeList < win_end) &
                               np.isin(afferentList, participating_list))
                     keep_mask[in_win] = False
 
-                # Paste template copies
+                # 粘贴模板副本
                 for a, rel_times in templates.items():
                     for rt in rel_times:
                         jittered = rt + jitter * rng.randn()
@@ -109,7 +114,7 @@ def generate_spike_train(params):
                         all_new_spikes.append(win_start + jittered)
                         all_new_afferents.append(a)
 
-    # Combine
+    # 合并
     if len(all_new_spikes) > 0:
         new_spikes = np.array(all_new_spikes)
         new_afferents = np.array(all_new_afferents, dtype=np.uint16)
@@ -118,11 +123,11 @@ def generate_spike_train(params):
         spikeList = np.concatenate([kept_spikes, new_spikes])
         afferentList = np.concatenate([kept_afferents, new_afferents])
 
-    # ── Step 3: Sort ──
+    # ── 第3步：排序 ──
     sort_idx = np.argsort(spikeList)
     spikeList = spikeList[sort_idx]
     afferentList = afferentList[sort_idx].astype(np.uint16)
 
-    print(f"  Final: {len(spikeList)} spikes")
+    print(f"  最终: {len(spikeList)} 个脉冲")
 
     return spikeList, afferentList

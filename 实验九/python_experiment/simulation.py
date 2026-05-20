@@ -1,6 +1,6 @@
-"""Main simulation engine: SRM/LIF neurons with STDP and lateral inhibition.
+"""主仿真引擎：带STDP和侧向抑制的SRM/LIF神经元。
 
-Numba-accelerated implementation based on:
+基于 Numba 加速实现，参照：
 Masquelier T, Guyonneau R, Thorpe SJ (2009).
 Competitive STDP-based Spike Pattern Learning. Neural Computation.
 """
@@ -8,31 +8,6 @@ Competitive STDP-based Spike Pattern Learning. Neural Computation.
 import numpy as np
 from numba import njit
 from kernels import make_epsp_kernel, make_pss_kernel, make_ipsp_kernel
-
-
-@njit
-def _psp_kernel_numba(t_array, tau_s, tau_m):
-    """Double-exponential PSP kernel for Numba."""
-    n = len(t_array)
-    kernel = np.zeros(n, dtype=np.float64)
-    for i in range(n):
-        t = t_array[i]
-        if t < 0:
-            kernel[i] = 0.0
-        else:
-            if abs(tau_s - tau_m) < 1e-15:
-                kernel[i] = (t / tau_s) * np.exp(1.0 - t / tau_s)
-            else:
-                kernel[i] = np.exp(-t / tau_m) - np.exp(-t / tau_s)
-    # Normalize
-    max_val = 0.0
-    for i in range(n):
-        if kernel[i] > max_val:
-            max_val = kernel[i]
-    if max_val > 0:
-        for i in range(n):
-            kernel[i] /= max_val
-    return kernel
 
 
 @njit
@@ -46,15 +21,15 @@ def _compute_pot_numba(epsp_amp, epsp_time, epsp_aff, n_epsp, N_EPSP,
                        threshold, inhib_strength, refractory_period,
                        tmp_resolution, tr_pot,
                        current_time, n_period):
-    """Numba-accelerated potential computation.
+    """Numba加速的膜电位计算。
 
-    Returns (nextFiring, maxPotential, currentPotential).
+    返回 (下次发放时间, 最大电位, 当前电位)。
     """
     period = np.arange(n_period) * tmp_resolution + current_time
     potential = np.zeros(n_period, dtype=np.float64)
     nE = n_epsp
 
-    # Sum EPSPs
+    # 求和所有EPSP
     for e_idx in range(nE - 1, -1, -1):
         c = e_idx % N_EPSP
         w = epsp_amp[c]
@@ -70,7 +45,7 @@ def _compute_pot_numba(epsp_amp, epsp_time, epsp_aff, n_epsp, N_EPSP,
         for i in range(n_contrib):
             potential[i] += w * epsp_kernel[shift + i]
 
-    # Sum IPSPs
+    # 求和所有IPSP
     if inhib_strength > 0:
         nI = n_ipsp
         for e_idx in range(nI - 1, -1, -1):
@@ -86,7 +61,7 @@ def _compute_pot_numba(epsp_amp, epsp_time, epsp_aff, n_epsp, N_EPSP,
                 potential[i] -= (inhib_strength * threshold *
                                  ipsp_kernel[shift + i])
 
-    # Add PSS
+    # 添加PSS（发放后电位）
     if use_pss and n_firing > 0:
         last_fire = firing_time[(n_firing - 1) % N_FIRING]
         shift_f = (period[0] - last_fire) / tmp_resolution
@@ -102,7 +77,7 @@ def _compute_pot_numba(epsp_amp, epsp_time, epsp_aff, n_epsp, N_EPSP,
     next_firing = np.inf
 
     if max_pot >= threshold + tr_pot:
-        # Check refractory
+        # 检查不应期
         can_fire = True
         if n_firing > 0:
             last_fire = firing_time[(n_firing - 1) % N_FIRING]
@@ -128,7 +103,7 @@ def _compute_pot_numba(epsp_amp, epsp_time, epsp_aff, n_epsp, N_EPSP,
 
 
 class Neuron:
-    """Lightweight neuron data holder (no methods - all logic is in Numba functions)."""
+    """轻量级神经元数据容器（逻辑均在Numba函数中）。"""
     __slots__ = ('weight', 'epspAmplitude', 'epspTime', 'epspAfferent',
                  'nEpsp', 'N_EPSP', 'ipspTime', 'nIpsp', 'N_IPSP',
                  'nextFiring', 'firingTime', 'nFiring', 'N_FIRING',
@@ -161,7 +136,7 @@ class Neuron:
 
 
 class Simulation:
-    """Event-driven simulation of SRM/LIF neurons with STDP and lateral inhibition."""
+    """多个SRM/LIF神经元的带STDP和侧向抑制事件驱动仿真。"""
 
     def __init__(self, params):
         self.params = params
@@ -176,10 +151,10 @@ class Simulation:
         self.nPeriod = 0
 
     def initialize(self, spikeList, rng_seed_offset=1):
-        """Initialize neurons and kernels."""
+        """初始化神经元和核。"""
         params = self.params
 
-        # Build kernels
+        # 构建核
         self.epsp_kernel, self.epspMaxTime = make_epsp_kernel(params)
         self.nEpspKernel = len(self.epsp_kernel)
         self.nPeriod = int(np.ceil(self.epspMaxTime / params.tmpResolution)) + 1
@@ -194,7 +169,7 @@ class Simulation:
         self.ipsp_kernel = make_ipsp_kernel(params)
         self.nIpspKernel = len(self.ipsp_kernel)
 
-        # EPSP buffer size
+        # EPSP缓冲区大小：根据脉冲率估计
         total_spikes = len(spikeList)
         if len(spikeList) > 0:
             total_time = spikeList[-1]
@@ -204,7 +179,7 @@ class Simulation:
         N_epsp = int(round(3.5 * params.epspCut * params.tm * avg_rate))
         N_epsp = max(N_epsp, 10000)
 
-        # Create neurons
+        # 创建神经元
         rng = np.random.RandomState(params.randomState + rng_seed_offset)
         self.neurons = [
             Neuron(params.nAfferent, N_epsp, rng)
@@ -212,14 +187,14 @@ class Simulation:
         ]
 
     def run(self, spikeList, afferentList):
-        """Run simulation on spike train (Numba-accelerated inner loops)."""
+        """在脉冲序列上运行仿真（Numba加速内循环）。"""
         params = self.params
         neurons = self.neurons
         nNeuron = len(neurons)
         nSpikes = len(spikeList)
         nAfferent = params.nAfferent
 
-        # Extract kernel data
+        # 提取核数据
         epsp_kernel = self.epsp_kernel
         ipsp_kernel = self.ipsp_kernel
         pss_kernel = self.pss_kernel
@@ -234,7 +209,7 @@ class Simulation:
         usePss = params.usePssKernel
         beSmart = params.beSmart
 
-        # STDP params
+        # STDP参数
         stdp_t_pos = params.stdp_t_pos
         stdp_t_neg = params.stdp_t_neg
         stdp_a_pos = params.stdp_a_pos
@@ -250,12 +225,12 @@ class Simulation:
         for s_idx in range(nSpikes):
             if s_idx % report_interval == 0:
                 pct = 100 * s_idx / nSpikes
-                print(f"  Progress: {pct:.0f}%", end="\r")
+                print(f"  进度: {pct:.0f}%", end="\r")
 
             spikeTime = spikeList[s_idx]
             afferent = afferentList[s_idx]
 
-            # ── Handle firings that occur before this input spike ──
+            # ── 处理在此输入脉冲之前发生的发放 ──
             while nextFiring <= spikeTime:
                 t_fire = nextFiring
                 winner = nextOneToFire
@@ -265,18 +240,18 @@ class Simulation:
                 self._ltp_numba(winner_n, t_fire,
                                 stdp_t_pos, stdp_a_pos, stdp_cut, minWeight)
 
-                # Record firing
+                # 记录发放
                 winner_n.nFiring += 1
                 winner_n.firingTime[(winner_n.nFiring - 1) % winner_n.N_FIRING] = t_fire
 
-                # Flush
+                # 清空缓冲区
                 winner_n.nEpsp = 0
                 winner_n.maxPotential = 0.0
                 winner_n.nIpsp = 0
                 winner_n.nextFiring = np.inf
                 winner_n.alreadyDepressed[:] = False
 
-                # Inhibit others
+                # 抑制其他神经元
                 if inhibStrength > 0:
                     for i in range(nNeuron):
                         if i != winner:
@@ -288,11 +263,11 @@ class Simulation:
 
                 nextFiring = np.inf
 
-            # ── Process input spike ──
+            # ── 处理输入脉冲 ──
             for i in range(nNeuron):
                 nrn = neurons[i]
 
-                # Add EPSP
+                # 添加EPSP
                 nrn.nEpsp += 1
                 cursor = (nrn.nEpsp - 1) % nrn.N_EPSP
                 nrn.epspAmplitude[cursor] = nrn.weight[afferent]
@@ -308,7 +283,7 @@ class Simulation:
                         nrn.weight[afferent] = max(minWeight, nrn.weight[afferent] + dw)
                         nrn.alreadyDepressed[afferent] = True
 
-                # Check if potential computation is needed
+                # 判断是否需要计算电位
                 need_compute = True
                 if beSmart:
                     if nrn.maxPotential + nrn.weight[afferent] < threshold + nrn.trPot:
@@ -333,17 +308,17 @@ class Simulation:
                     nrn.maxPotential = maxPot
                     nrn.currentPotential = curPot
 
-            # Update next firing across all neurons
+            # 更新所有神经元中的下一次发放
             for i in range(nNeuron):
                 nf = neurons[i].nextFiring
                 if not np.isinf(nf) and nf < nextFiring:
                     nextFiring = nf
                     nextOneToFire = i
 
-        print("  Progress: 100%")
+        print("  进度: 100%")
 
     def _ltp_numba(self, neuron, firingTime, stdp_t_pos, stdp_a_pos, stdp_cut, minWeight):
-        """LTP: potentiate weights. Inlined for speed (no Numba on method)."""
+        """LTP：增强权值。内联实现以提高速度。"""
         weight = neuron.weight
         epspTime = neuron.epspTime
         epspAff = neuron.epspAfferent
