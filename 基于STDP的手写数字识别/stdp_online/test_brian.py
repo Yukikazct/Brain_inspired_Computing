@@ -2,7 +2,7 @@
 import sys, os, numpy as np
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         '..', 'stdp-mnist', 'data', 'stdp_cython')
+                         '..', 'stdp-mnist', 'data', 'stdp_full')
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ---- 准确率 (秒出, 读混淆矩阵) ----
