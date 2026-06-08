@@ -1,11 +1,11 @@
-"""Brian2 STDP 测试 — 秒出结果 + 生成可视化"""
+"""Brian2 STDP 测试 """
 import sys, os, numpy as np
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          '..', 'stdp-mnist', 'data', 'stdp_full')
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ---- 准确率 (秒出, 读混淆矩阵) ----
+
 conf_path = os.path.join(DATA_DIR, 'confusion.npy')
 if not os.path.exists(conf_path):
     print(f"❌ {conf_path} 不存在")
