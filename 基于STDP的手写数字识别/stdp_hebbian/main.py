@@ -32,6 +32,23 @@ MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_heb
 
 
 def train_pipeline():
+    """
+    完整训练流程: 初始化 → Hebbian竞争学习 → 标签分配 → 保存模型。
+
+    流程:
+      1. 加载 MNIST 数据集
+      2. 创建 SNN 并基于训练样本初始化权重 (每类均匀采样)
+      3. 多轮训练循环 (N_EPOCHS × N_TRAIN_SAMPLES):
+         - 每个样本送入 train_on_sample() 执行 Hebbian 竞争学习
+         - 自适应输入强度: 发放不足时提高, 正常时降低, 确保稳定发放
+         - 每5000步输出进度和统计
+      4. 标签分配: 对 N_LABEL_SAMPLES 个训练样本做前向推理,
+         统计赢家归属, 为每个神经元分配数字类别
+      5. 保存模型到 MODEL_PATH
+
+    返回:
+        (snn, train_imgs, train_labels, test_imgs, test_labels, train_time)
+    """
     print("=" * 60)
     print("STDP速率近似 — Hebbian LTP + 权重归一化")
     print(f"网络: {N_INPUT}输入 → {N_EXCITATORY} LIF神经元")
@@ -95,6 +112,24 @@ def train_pipeline():
 
 
 def test_pipeline(snn=None, test_imgs=None, test_labels=None, mpath=None):
+    """
+    测试流程: 加载模型 → 遍历测试集 → Top-K投票预测 → 输出准确率 → 保存混淆矩阵 → 可视化。
+
+    可通过参数传入已训练的 SNN 和数据, 也可通过 mpath 自动加载。
+    测试完成后自动生成:
+      - confusion_hebbian.npy: 10×10 混淆矩阵 (供 test.py 秒出准确率)
+      - receptive_fields_hebbian.png: 感受野可视化
+      - neuron_assignment_hebbian.png: 神经元标签分配图
+
+    参数:
+        snn: 已训练的 SNN 实例 (可选)
+        test_imgs: 测试图像 (可选)
+        test_labels: 测试标签 (可选)
+        mpath: 模型文件路径 (可选, 默认 MODEL_PATH)
+
+    返回:
+        acc: float 测试准确率 (%)
+    """
     print("=" * 60)
     print("Hebbian SNN 测试")
     print("=" * 60)
@@ -135,6 +170,16 @@ def test_pipeline(snn=None, test_imgs=None, test_labels=None, mpath=None):
 
 
 def main():
+    """
+    CLI 入口: 解析命令行参数, 执行训练+测试或仅测试。
+
+    用法:
+      python main.py                训练+测试 (默认)
+      python main.py --test         仅测试 (加载已有模型)
+      python main.py --test --model-path <路径>  从指定路径加载模型测试
+
+    关键超参数在文件顶部定义 (N_EXCITATORY, N_EPOCHS, LR 等)。
+    """
     mpath = None
     for i, a in enumerate(sys.argv):
         if a == '--model-path' and i+1 < len(sys.argv): mpath = sys.argv[i+1]
