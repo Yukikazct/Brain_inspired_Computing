@@ -23,7 +23,7 @@ LTD (每个输入脉冲触发):  w[j,i] -= nu_pre × post1[i]      nu_pre=0.0001
 LTP (每个神经元发放触发): w[j,i] += nu_post × pre[j] × post2_before[i]  nu_post=0.01
 ```
 
-权重更新在LIF仿真过程中**在线进行**，每个spike触发，严格依赖spike timing。
+权重更新在LIF仿真过程中在线进行，每个spike触发，严格依赖spike timing。
 权重归一化在每样本前执行（`w *= 78.0 / sum(w)`），作为LTD的全局稳态机制。
 
 ## 与 fork 的原始代码对比
