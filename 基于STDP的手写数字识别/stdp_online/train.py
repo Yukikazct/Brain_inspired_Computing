@@ -5,7 +5,7 @@ from model import Params, Network
 
 # ── 超参数 ──
 p = Params(
-    n_exc=400, n_train=60000, n_epochs=3, n_label=30000, seed=42,
+    n_exc=1600, n_train=60000, n_epochs=3, n_label=30000, seed=42,
     duration=350.0, max_rate=63.75,
     nu_pre=0.0001, nu_post=0.01,
     tau_pre=20.0, tau_post1=20.0, tau_post2=40.0,
