@@ -136,14 +136,6 @@ def _simulate_step_stdp(
         post1[best] = 1.0
         post2[best] = 1.0
 
-    # ── 权重裁剪 ──
-    for i in range(n_exc):
-        for j in range(n_inp):
-            if w[i, j] < 0.0:
-                w[i, j] = 0.0
-            elif w[i, j] > w_max:
-                w[i, j] = w_max
-
     return fired
 
 
@@ -218,6 +210,8 @@ class Network:
             )
             for idx in fired:
                 counts[idx] += 1
+        # 权重裁剪 (循环外, 只做一次)
+        np.clip(self.w, 0.0, self.p.w_max, out=self.w)
         return counts
 
     def train_one(self, image, seed=None):
