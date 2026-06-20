@@ -6,7 +6,7 @@ DATA_DIR = os.path.join(HERE, '..', 'data', 'stdp_full')
 
 conf_path = os.path.join(DATA_DIR, 'confusion.npy')
 if not os.path.exists(conf_path):
-    print(f"❌ {conf_path} 不存在, 先运行 train.py 训练")
+    print(f" {conf_path} 不存在, 先运行 train.py 训练")
     sys.exit(1)
 
 conf = np.load(conf_path)

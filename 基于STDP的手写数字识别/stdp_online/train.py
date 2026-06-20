@@ -10,6 +10,7 @@
 """
 
 import os, sys, time, numpy as np
+import torch, torch.nn as nn, torch.optim as optim
 from pathlib import Path
 from collections import defaultdict
 from random import randrange, seed as rseed
@@ -23,7 +24,7 @@ from brian2 import (prefs, seed as bseed, NeuronGroup, Synapses,
 from brian2.units import volt
 
 prefs.codegen.cpp.extra_compile_args_gcc = ['-O3', '-ffast-math']
-prefs.codegen.target = 'cython'
+prefs.codegen.target = 'numpy'  # M5 Pro Cython编译兼容问题
 
 HERE = os.path.dirname(os.path.abspath(__file__))  # 脚本所在目录, 用于路径解析
 
@@ -43,7 +44,7 @@ class Params:
     def __init__(self, **kwargs):
         # ── 网络结构 ──
         self.n_input    = kwargs.get("n_input", 784)   # MNIST像素数 (28×28)
-        self.n_exc      = kwargs.get("n_exc", 1600)    # 兴奋神经元数
+        self.n_exc      = kwargs.get("n_exc", 400)     # 兴奋神经元数
         self.n_inh      = self.n_exc                   # 抑制神经元数 (=兴奋数)
 
         # ── 仿真时间 ──
@@ -90,7 +91,7 @@ class Params:
         self.target_sum = kwargs.get("target_sum", 78.0)   # 每神经元权重总和目标
 
         # ── 训练控制 ──
-        self.n_train    = kwargs.get("n_train", 180000)   # 训练样本总数
+        self.n_train    = kwargs.get("n_train", 10000)    # 训练样本总数
         self.n_observe  = kwargs.get("n_observe", 5000)   # 标签分配样本数
         self.n_test     = kwargs.get("n_test", 10000)     # 测试样本数
         self.n_save     = kwargs.get("n_save", 20)         # 权重复制保存间隔
@@ -439,16 +440,54 @@ def test(p):
 
 
 # ═══════════════════════════════════════════════════════════════
+# MLP读出层 (监督学习, 提升分类准确率)
+# ═══════════════════════════════════════════════════════════════
+
+class MLP(nn.Module):
+    """STDP特征 → 类别概率: 400 → 256 → ReLU → Dropout → 10。"""
+    def __init__(self, n_in=400, n_hidden=256, n_out=10, dropout=0.5):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_in, n_hidden), nn.ReLU(),
+            nn.Dropout(dropout), nn.Linear(n_hidden, n_out))
+
+    def forward(self, x): return self.net(x)
+
+
+def train_mlp(features, labels, n_epochs=300, lr=0.001, wd=1e-4):
+    """训练MLP读出层。features: (N, 400) firing rate特征, labels: (N,)"""
+    model = MLP(n_in=features.shape[1])
+    opt = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+    loss_fn = nn.CrossEntropyLoss()
+    for epoch in range(n_epochs):
+        opt.zero_grad()
+        loss = loss_fn(model(features), labels)
+        loss.backward(); opt.step()
+        if (epoch+1) % 50 == 0:
+            acc = (model(features).argmax(1) == labels).float().mean()
+            print(f"  epoch {epoch+1}: loss={loss.item():.4f} acc={acc:.2%}")
+    return model
+
+
+def extract_features(net, X, p):
+    """提取STDP特征: 对每张图做前向推理, 收集各神经元发放计数。"""
+    feats, labs = [], []
+    for i in range(len(X)):
+        pat = show_sample(net, X[i], p.intensity)
+        feats.append(torch.from_numpy(pat.astype(np.float32)))
+        labs.append(0)  # placeholder
+    return torch.stack(feats)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 主程序入口
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    os.chdir(HERE)  # 切换到脚本目录, 确保 ../data 相对路径正确
+    os.chdir(HERE)
     p = Params()
     p.data_path.mkdir(parents=True, exist_ok=True)
-
-    # 固定随机种子 (保证可复现)
-    bseed(p.seed); rseed(p.seed); np.random.seed(p.seed)
+    bseed(p.seed); rseed(p.seed); np.random.seed(p.seed); torch.manual_seed(p.seed)
 
     print("=" * 50)
     print("Brian2 STDP — Diehl & Cook (2015)")
@@ -457,8 +496,50 @@ if __name__ == "__main__":
     print("=" * 50)
 
     if "--test" in sys.argv:
-        test(p)                                          # 仅测试
+        test(p)
     else:
-        train(p)                                         # Phase 1: 训练
-        observe(p)                                       # Phase 2: 标签分配
-        test(p)                                          # Phase 3: 测试
+        # Phase 1: STDP无监督训练
+        train(p)
+
+        # Phase 2: 标签分配
+        observe(p)
+
+        # Phase 3: 提取STDP特征 + 训练MLP读出层
+        print("\nPhase 3: 提取特征 + MLP训练...")
+        Xt, Yt = read_mnist(True, p.mnist_path)
+        Xv, Yv = read_mnist(False, p.mnist_path)
+
+        # 无监督投票基线
+        test(p)
+
+        # 提取特征 (用部分样本加速)
+        net = build_network(p, training=False)
+        N_MLP_TRAIN = 10000  # MLP训练用样本数
+        N_MLP_TEST = 2000
+        print(f"提取训练特征 ({N_MLP_TRAIN}样本)...")
+        F_train = extract_features(net, Xt[:N_MLP_TRAIN], p)
+        L_train = torch.tensor(Yt[:N_MLP_TRAIN], dtype=torch.long)
+        print(f"提取测试特征 ({N_MLP_TEST}样本)...")
+        F_test = extract_features(net, Xv[:N_MLP_TEST], p)
+        L_test = torch.tensor(Yv[:N_MLP_TEST], dtype=torch.long)
+
+        # 训练MLP
+        print(f"\nMLP训练: {F_train.shape[1]} → 256 → ReLU → Dropout → 10")
+        mlp = train_mlp(F_train, L_train, n_epochs=300)
+
+        # 评估
+        with torch.no_grad():
+            train_preds = mlp(F_train).argmax(1)
+            train_acc = (train_preds == L_train).float().mean()
+            test_preds = mlp(F_test).argmax(1)
+            test_acc = (test_preds == L_test).float().mean()
+        print(f"\n★ MLP训练准确率: {train_acc:.2%}")
+        print(f"★ MLP测试准确率: {test_acc:.2%} ({N_MLP_TEST}样本)")
+
+        for c in range(10):
+            mask = L_test == c
+            if mask.sum() > 0:
+                a = (test_preds[mask] == c).float().mean()
+                print(f"  {c}: {a:.1%}")
+
+        torch.save(mlp.state_dict(), p.data_path / 'mlp.pth')
