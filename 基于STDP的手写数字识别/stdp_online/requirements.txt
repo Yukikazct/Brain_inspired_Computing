@@ -1,5 +1,5 @@
-numpy>=1.21.0
+numpy>=1.21.0,<2
 matplotlib>=3.5.0
-numba>=0.56.0
+brian2>=2.5.0
 torch>=2.0.0
 tqdm>=4.62.0

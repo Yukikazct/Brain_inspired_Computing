@@ -315,7 +315,7 @@ def save_npy(arr, path):
 
 
 # ═══════════════════════════════════════════════════════════════
-# 三阶段训练流水线
+# 三阶段训练
 # ═══════════════════════════════════════════════════════════════
 
 def train(p):
@@ -543,3 +543,11 @@ if __name__ == "__main__":
                 print(f"  {c}: {a:.1%}")
 
         torch.save(mlp.state_dict(), p.data_path / 'mlp.pth')
+
+        # 保存MLP预测结果给test.py
+        mlp_conf = np.zeros((10, 10), dtype=int)
+        for i in range(len(L_test)):
+            mlp_conf[int(L_test[i]), int(test_preds[i])] += 1
+        np.save(p.data_path / 'mlp_confusion.npy', mlp_conf)
+        mlp_acc = np.trace(mlp_conf) / np.sum(mlp_conf) * 100
+        print(f"\nMLP混淆矩阵已保存, 准确率: {mlp_acc:.2f}%")
