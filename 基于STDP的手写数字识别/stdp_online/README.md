@@ -1,5 +1,6 @@
 # STDP脉冲神经网络 — MNIST手写数字识别
 
+**Diehl & Cook (2015) 在线三重STDP — 完整脉冲仿真 + 真实STDP学习规则**
 
 ## 快速运行
 
@@ -11,6 +12,7 @@ python main.py
 
 ## STDP规则
 
+严格实现 Diehl & Cook (2015) 的三重trace在线STDP：
 
 ```
 pre trace:  tau=20ms, 输入脉冲发放 → pre=1
@@ -21,9 +23,24 @@ LTD (每个输入脉冲触发):  w[j,i] -= nu_pre × post1[i]      nu_pre=0.0001
 LTP (每个神经元发放触发): w[j,i] += nu_post × pre[j] × post2_before[i]  nu_post=0.01
 ```
 
-权重更新在LIF仿真过程中在线进行，每个spike触发，严格依赖spike timing。
+权重更新在LIF仿真过程中**在线进行**，每个spike触发，严格依赖spike timing。
 权重归一化在每样本前执行（`w *= 78.0 / sum(w)`），作为LTD的全局稳态机制。
 
+## 与 fork 的原始代码对比
+
+本实现 (`stdp_spike/`) vs 论文原始代码 (`stdp-mnist/`):
+
+| | 本实现 (stdp_spike) | 原始代码 (stdp-mnist) |
+|------|------|------|
+| **仿真器** | Numba JIT (Python) | Brian1 / Brian2 |
+| **STDP** | ✅ 在线三重STDP | ✅ 在线三重STDP |
+| **LIF神经元** | ✅ 电导型 | ✅ 电导型 |
+| **侧向抑制** | ✅ 全局抑制 (17.0) | ✅ E↔I回路 |
+| **内在可塑性** | ✅ 自适应theta | ✅ 自适应theta |
+| **泊松编码** | ✅ 63.75Hz | ✅ 输入/8 × intensity |
+| **权重归一化** | ✅ 每样本 (target=78) | ✅ 每样本 (target=78) |
+| **依赖** | numpy + numba + matplotlib | brian2 + numpy |
+| **训练速度** | Numba加速 (较慢) | C代码生成 (快) |
 
 ## 网络架构
 
