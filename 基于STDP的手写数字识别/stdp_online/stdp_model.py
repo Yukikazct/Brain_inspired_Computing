@@ -7,9 +7,7 @@ from struct import unpack
 import numpy as np
 import itertools
 
-# ═══════════════════════════════════════════════════════════════
 # 超参数（由 train_stdp.py 覆盖）
-# ═══════════════════════════════════════════════════════════════
 MODE = 'test'           # 运行模式: 'train' | 'observe' | 'test' | 'plot'
 N_TRAIN = 25_000        # 训练样本总数（循环使用MNIST的60K训练集）
 N_OBSERVE = 2_000       # 标签分配阶段使用的样本数
@@ -71,10 +69,7 @@ def read_mnist(training):
     y = np.frombuffer(labels.read(), dtype=np.uint8)
     return x, y
 
-
-# ═══════════════════════════════════════════════════════════════
 # 网络构建 — 核心部分
-# ═══════════════════════════════════════════════════════════════
 
 def build_network(training):
     """
@@ -90,7 +85,7 @@ def build_network(training):
       SpikeMonitor → 记录发放
 
     返回:
-      Brian2 Network对象（已初始化，可直接run）
+      Brian2 Network对象
     """
     # ── 基础LIF方程（兴奋层和抑制层共用） ──
     # dv/dt: 膜电位变化 = 漏电流 + 兴奋输入 + 抑制输入

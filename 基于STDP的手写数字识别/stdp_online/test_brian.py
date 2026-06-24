@@ -72,13 +72,11 @@ for i in range(10):
     a = row[i] / row.sum() * 100 if row.sum() > 0 else 0
     print(f"  {i}: {a:.1f}%")
 
-# ═══════════════════════════════════════════════════════════════
 # 3. 可视化
-# ═══════════════════════════════════════════════════════════════
 from utils import visualize_weights, visualize_label_responses
 
 # 3a. 感受野: 从每类选2个神经元，展示其784维权重重塑为28×28灰度图
-# 亮区 = 该神经元最敏感的像素位置（"感受野"）
+
 w_ie = np.load(str(DATA_DIR / 'weights.npy')).reshape(len(assign), -1)
 idxs = []
 for c in range(10):

@@ -25,7 +25,7 @@ Brian2加速策略:
 import os, time, numpy as np
 from pathlib import Path
 
-# GCC编译优化: -O3最高优化级别, -ffast-math放宽浮点精度换取速度
+# GCC编译优化:
 os.environ['CFLAGS'] = '-O3'
 
 # ── 项目路径 ──
@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent       # stdp_online/ 目录
 from brian2 import prefs, seed as bseed
 # 设置C++编译选项，生成高效Cython代码
 prefs.codegen.cpp.extra_compile_args_gcc = ['-O3', '-ffast-math']
-prefs.codegen.target = 'cython'              # 使用Cython后端（C代码编译）
+prefs.codegen.target = 'cython'            
 
 import stdp_model as dc                      # STDP核心模型
 
