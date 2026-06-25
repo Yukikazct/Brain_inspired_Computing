@@ -14,3 +14,8 @@ __pycache__/
 **/.brian_cython_cache/
 *.venv/
 venv/
+
+# === 基于STDP项目例外 — 预训练模型和结果需上传 ===
+!基于STDP的手写数字识别/项目代码/**/*.npy
+!基于STDP的手写数字识别/项目代码/**/*.npz
+!基于STDP的手写数字识别/项目代码/**/*.png
