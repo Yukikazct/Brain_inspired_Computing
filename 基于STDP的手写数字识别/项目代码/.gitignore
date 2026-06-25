@@ -1,0 +1,32 @@
+# Office文档
+*.docx
+*.pptx
+*.doc
+*.ppt
+*.xlsx
+
+# PDF（参考论文除外）
+*.pdf
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+
+# 大文件 — 权重历史快照 725MB 太大无法上传
+**/train_w_hist.npy
+
+# MNIST原始数据 — 代码会自动下载
+**/train-images-idx3-ubyte*
+**/train-labels-idx1-ubyte*
+**/t10k-images-idx3-ubyte*
+**/t10k-labels-idx1-ubyte*
+
+# 旧版数据
+data/stdp_full/
