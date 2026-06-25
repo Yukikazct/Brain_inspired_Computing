@@ -26,7 +26,6 @@ N_TEST = 1_000          # 测试样本数
 SEED = 42               # 全局随机种子，确保结果可复现
 MNIST_PATH = Path(__file__).resolve().parent.parent / 'data'  # 默认: 项目根/data/
 DATA_PATH = Path(__file__).resolve().parent / 'data' / 'stdp_full'  # 默认输出目录
-N_SAVE_POINTS = 100
 
 # 网络常数（来自Diehl & Cook 2015论文）
 N_INP = 784             # 输入神经元数 = 28×28 MNIST像素
@@ -375,25 +374,19 @@ def train():
       - weights.npy:        最终STDP权重
       - theta.npy:          自适应阈值
       - train_stats.npy:    训练统计序列
-      - train_w_hist.npy:   权重历史快照（用于分析权重演化）
     """
     X, Y = read_mnist(True)                            # 加载训练集
     n_samples = X.shape[0]
     net = build_network(True)                          # 构建训练网络（STDP启用）
     rows = [stats(net) + [-1]]                         # 统计序列（初始状态）
-    w_hist = [np.array(net['inp_exc'].w)]              # 权重历史（初始权重）
 
-    ratio = max(N_TRAIN // N_SAVE_POINTS, 1)           # 每隔多少样本保存一次权重快照
     for i in ProgressBar()(range(N_TRAIN)):
         ix = i % n_samples                              # 循环使用训练集
         normalize_plastic_weights(net['inp_exc'])      # 每样本前归一化
         show_sample(net, X[ix], INTENSITY)             # 仿真 + STDP更新
         rows.append(stats(net) + [Y[ix]])              # 记录统计 + 真实标签
-        if i % ratio == 0:
-            w_hist.append(np.array(net['inp_exc'].w))  # 保存权重快照
 
     save_npy(rows, DATA_PATH / 'train_stats.npy')
-    save_npy(w_hist, DATA_PATH / 'train_w_hist.npy')
     save_npy(net['inp_exc'].w, DATA_PATH / 'weights.npy')
     save_npy(net['exc'].theta, DATA_PATH / 'theta.npy')
 
